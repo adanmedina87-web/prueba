@@ -18,7 +18,7 @@ export const AutocompleteSearch: React.FC<Props> = ({ products, onSelect, placeh
     if (query.trim().length > 1) {
       const filtered = products.filter(p => 
         p.name.toLowerCase().includes(query.toLowerCase()) || 
-        p.sku.toLowerCase().includes(query.toLowerCase())
+        (p.sku && p.sku.toLowerCase().includes(query.toLowerCase()))
       );
       setSuggestions(filtered.slice(0, 5));
       setIsOpen(true);
@@ -46,7 +46,7 @@ export const AutocompleteSearch: React.FC<Props> = ({ products, onSelect, placeh
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={placeholder || "Escribe el nombre del producto..."}
-          className="w-full px-5 py-3 pl-12 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm"
+          className="w-full px-5 py-4 pl-12 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all shadow-sm text-sm"
         />
         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">
           <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -56,7 +56,7 @@ export const AutocompleteSearch: React.FC<Props> = ({ products, onSelect, placeh
       </div>
 
       {isOpen && suggestions.length > 0 && (
-        <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden animate-fade-in">
+        <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-2xl shadow-2xl overflow-hidden animate-fade-in divide-y divide-slate-50">
           {suggestions.map((product) => (
             <li
               key={product.id}
@@ -65,15 +65,17 @@ export const AutocompleteSearch: React.FC<Props> = ({ products, onSelect, placeh
                 setQuery(product.name);
                 setIsOpen(false);
               }}
-              className="px-5 py-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors"
+              className="px-5 py-4 hover:bg-blue-50 active:bg-blue-100 cursor-pointer flex justify-between items-center transition-colors"
             >
-              <div>
-                <p className="font-medium text-slate-800">{product.name}</p>
-                <p className="text-xs text-slate-400">{product.sku} • {product.category}</p>
+              <div className="flex-1 pr-4">
+                <p className="font-bold text-slate-800 text-sm">{product.name}</p>
+                <p className="text-[11px] text-slate-400 truncate">{product.location}</p>
               </div>
-              <span className="text-xs bg-slate-100 px-2 py-1 rounded text-slate-500">
-                Stock: {product.quantity}
-              </span>
+              <div className="shrink-0 text-right">
+                <span className="text-[10px] font-bold bg-blue-50 text-blue-600 px-2 py-1 rounded-lg">
+                  Q: {product.quantity}
+                </span>
+              </div>
             </li>
           ))}
         </ul>

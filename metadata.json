@@ -1,5 +1,6 @@
+
 {
-  "name": "Inventario consulta",
-  "description": "A sophisticated inventory management and query system featuring autocomplete, location tracking, and AI-powered data analysis.",
+  "name": "Inventario bodega",
+  "description": "Aplicación de control de inventario vinculada a Google Sheets con IA.",
   "requestFramePermissions": []
 }

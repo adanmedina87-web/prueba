@@ -2,7 +2,8 @@
 import { GoogleGenAI } from "@google/genai";
 import { Product } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Always initialize with a named parameter and use process.env.API_KEY directly.
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const getInventoryInsights = async (query: string, inventory: Product[]) => {
   try {
@@ -22,6 +23,7 @@ export const getInventoryInsights = async (query: string, inventory: Product[]) 
       },
     });
 
+    // Access the .text property directly, it is not a method.
     return response.text;
   } catch (error) {
     console.error("Gemini API Error:", error);
