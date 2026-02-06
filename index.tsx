@@ -54,7 +54,7 @@ const CustomLogo = () => (
 
 const ICONS = {
   Dashboard: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>,
-  Search: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+  Search: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7" /></svg>,
   Inventory: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" /></svg>,
   Settings: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
   Delivery: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" /></svg>,
@@ -79,6 +79,66 @@ const parseCSV = (text: string) => {
   const rows = text.split(/\r?\n/).filter(line => line.trim() !== '');
   if (rows.length === 0) return [];
   return rows.map(line => line.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.trim().replace(/^"|"$/g, '')));
+};
+
+// Helper robusto para normalizar fechas para comparación (solo YYYY-MM-DD)
+const getNormalizedTimestamp = (dateStr: string) => {
+  if (!dateStr) return null;
+  
+  const cleanStr = dateStr.trim();
+  
+  // Detectar separador común
+  const separator = cleanStr.includes('/') ? '/' : (cleanStr.includes('-') ? '-' : null);
+  
+  let y = 0, m = 0, d = 1;
+  
+  if (separator) {
+    const parts = cleanStr.split(separator);
+    if (parts.length >= 3) {
+      // Intentar detectar si es YYYY-MM-DD o DD-MM-YYYY
+      if (parts[0].length === 4) { // YYYY-MM-DD
+        y = parseInt(parts[0]);
+        m = parseInt(parts[1]) - 1;
+        d = parseInt(parts[2]);
+      } else { // DD-MM-YYYY
+        y = parseInt(parts[2]);
+        m = parseInt(parts[1]) - 1;
+        d = parseInt(parts[0]);
+      }
+    } else if (parts.length === 1 && parts[0].length === 4) {
+      y = parseInt(parts[0]);
+      m = 0;
+      d = 1;
+    } else {
+      // Fallback a constructor nativo
+      const fallback = new Date(cleanStr);
+      if (!isNaN(fallback.getTime())) {
+        fallback.setHours(0, 0, 0, 0);
+        return fallback.getTime();
+      }
+      return null;
+    }
+  } else {
+    // Caso de solo año (ej: "2024")
+    if (cleanStr.length === 4 && !isNaN(parseInt(cleanStr))) {
+      y = parseInt(cleanStr);
+      m = 0;
+      d = 1;
+    } else {
+      const fallback = new Date(cleanStr);
+      if (!isNaN(fallback.getTime())) {
+        fallback.setHours(0, 0, 0, 0);
+        return fallback.getTime();
+      }
+      return null;
+    }
+  }
+
+  const dateObj = new Date(y, m, d);
+  if (isNaN(dateObj.getTime())) return null;
+  
+  dateObj.setHours(0, 0, 0, 0);
+  return dateObj.getTime();
 };
 
 // --- 4. COMPONENTE BUSCADOR ---
@@ -270,6 +330,10 @@ const App: React.FC = () => {
   }, [uniquePersonas, deliveryFilters.persona]);
 
   const filteredDelivery = useMemo(() => {
+    // Normalizar marcas de tiempo para los filtros actuales (Inicio y Fin)
+    const filterStartTime = getNormalizedTimestamp(deliveryFilters.fechaInicio);
+    const filterEndTime = getNormalizedTimestamp(deliveryFilters.fechaFin);
+
     return deliveryData
       .filter(d => {
         const matchPersona = deliveryFilters.persona === '' || d.persona.toLowerCase().includes(deliveryFilters.persona.toLowerCase());
@@ -277,19 +341,23 @@ const App: React.FC = () => {
         const matchDepto = deliveryFilters.departamento === '' || d.departamento.toLowerCase() === deliveryFilters.departamento.toLowerCase();
         
         let matchFecha = true;
-        if (deliveryFilters.fechaInicio || deliveryFilters.fechaFin) {
-          const dFecha = new Date(d.fecha);
-          if (deliveryFilters.fechaInicio && dFecha < new Date(deliveryFilters.fechaInicio)) matchFecha = false;
-          if (deliveryFilters.fechaFin && dFecha > new Date(deliveryFilters.fechaFin)) matchFecha = false;
+        const recordTime = getNormalizedTimestamp(d.fecha);
+        
+        if (recordTime !== null) {
+          // Filtrado matemático exacto incluyendo años
+          if (filterStartTime !== null && recordTime < filterStartTime) matchFecha = false;
+          if (filterEndTime !== null && recordTime > filterEndTime) matchFecha = false;
+        } else {
+          // Si el registro no tiene fecha válida y hay filtros de fecha activos, no mostrar
+          if (filterStartTime !== null || filterEndTime !== null) matchFecha = false;
         }
 
         return matchPersona && matchSeccion && matchDepto && matchFecha;
       })
       .sort((a, b) => {
-        const dateA = new Date(a.fecha).getTime();
-        const dateB = new Date(b.fecha).getTime();
-        if (isNaN(dateA) || isNaN(dateB)) return 0;
-        return dateB - dateA;
+        const dateA = getNormalizedTimestamp(a.fecha) || 0;
+        const dateB = getNormalizedTimestamp(b.fecha) || 0;
+        return dateB - dateA; // Orden descendente por defecto
       });
   }, [deliveryData, deliveryFilters]);
 
@@ -537,7 +605,7 @@ const App: React.FC = () => {
                 <tbody className="text-slate-600 text-[13px] md:text-[15px] divide-y divide-slate-50">
                   {inventory.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 md:px-8 py-5 font-black text-blue-600 text-lg">{item.quantity}</td>
+                      <td className="px-4 md:px-8 py-5 font-black text-blue-600 text-xl">{item.quantity}</td>
                       <td className="px-4 md:px-8 py-5">
                          <p className="font-bold text-slate-800 uppercase tracking-tight line-clamp-2 md:line-clamp-1">{item.name}</p>
                          <p className="md:hidden text-[9px] text-slate-400 mt-0.5">{item.location}</p>
