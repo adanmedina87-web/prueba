@@ -593,30 +593,30 @@ const App: React.FC = () => {
                </button>
             </div>
             <div className="overflow-x-auto scrollbar-hide">
-              <table className="w-full text-left min-w-[500px] md:min-w-0">
-                <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[9px] md:text-[10px] tracking-widest">
+              <table className="w-full text-left min-w-[500px] md:min-w-0 table-fixed">
+                <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[7px] md:text-[9px] tracking-widest">
                   <tr>
-                    <th className="px-4 md:px-8 py-4 md:py-6">Stock</th>
-                    <th className="px-4 md:px-8 py-4 md:py-6">Activo</th>
-                    <th className="hidden md:table-cell px-8 py-6">Lugar</th>
-                    <th className="px-4 md:px-8 py-4 md:py-6 text-center">Acción</th>
+                    <th className="px-4 md:px-6 py-4 md:py-5 w-14 md:w-20">Stock</th>
+                    <th className="px-4 md:px-6 py-4 md:py-5 w-auto">Activo</th>
+                    <th className="hidden md:table-cell px-6 py-5 w-[20%]">Lugar</th>
+                    <th className="px-4 md:px-6 py-4 md:py-5 text-center w-14 md:w-20">Acción</th>
                   </tr>
                 </thead>
-                <tbody className="text-slate-600 text-[13px] md:text-[15px] divide-y divide-slate-50">
+                <tbody className="text-slate-600 text-[8px] md:text-[10px] divide-y divide-slate-50">
                   {inventory.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-4 md:px-8 py-5 font-black text-blue-600 text-xl">{item.quantity}</td>
-                      <td className="px-4 md:px-8 py-5">
+                      <td className="px-4 md:px-6 py-3 font-black text-blue-600 text-sm md:text-base">{item.quantity}</td>
+                      <td className="px-4 md:px-6 py-3">
                          <p className="font-bold text-slate-800 uppercase tracking-tight line-clamp-2 md:line-clamp-1">{item.name}</p>
-                         <p className="md:hidden text-[9px] text-slate-400 mt-0.5">{item.location}</p>
+                         <p className="md:hidden text-[8px] text-slate-400 mt-0.5">{item.location}</p>
                       </td>
-                      <td className="hidden md:table-cell px-8 py-5 font-bold text-slate-400 uppercase">{item.location}</td>
-                      <td className="px-4 md:px-8 py-5 text-center">
-                        <div className="flex items-center justify-center gap-2">
+                      <td className="hidden md:table-cell px-6 py-3 font-bold text-slate-400 uppercase">{item.location}</td>
+                      <td className="px-4 md:px-6 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           {item.link && (
                             <button 
                               onClick={() => handleZoom(extractDriveThumbnail(item.link)!)}
-                              className="text-blue-500 p-2 hover:bg-blue-50 rounded-xl transition-all active:scale-90"
+                              className="text-blue-500 p-1.5 hover:bg-blue-50 rounded-lg transition-all active:scale-90"
                             >
                               <ICONS.ZoomIn />
                             </button>
@@ -757,26 +757,26 @@ const App: React.FC = () => {
                   </div>
                </div>
                <div className="overflow-x-auto scrollbar-hide">
-                  <table className="w-full text-left min-w-[700px] md:min-w-0">
-                    <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[8px] md:text-[10px] tracking-widest">
+                  <table className="w-full text-left min-w-[700px] md:min-w-0 table-fixed">
+                    <thead className="bg-slate-50 text-slate-400 font-black uppercase text-[7.5px] md:text-[9px] tracking-widest">
                       <tr>
-                        <th className="px-4 md:px-8 py-4 md:py-6 text-center">Cant.</th>
-                        <th className="px-4 md:px-8 py-4 md:py-6">Producto</th>
-                        <th className="px-4 md:px-8 py-4 md:py-6">Persona</th>
-                        <th className="px-4 md:px-8 py-4 md:py-6">Sección</th>
-                        <th className="px-4 md:px-8 py-4 md:py-6">Depto</th>
-                        <th className="px-4 md:px-8 py-4 md:py-6">Fecha</th>
+                        <th className="px-4 md:px-8 py-4 md:py-6 text-center w-12 md:w-16">Cant.</th>
+                        <th className="px-4 md:px-8 py-4 md:py-6 w-auto">Producto</th>
+                        <th className="px-4 md:px-8 py-4 md:py-6 w-[18%]">Persona</th>
+                        <th className="px-4 md:px-8 py-4 md:py-6 w-[12%]">Sección</th>
+                        <th className="px-4 md:px-8 py-4 md:py-6 w-[15%]">Depto</th>
+                        <th className="px-4 md:px-8 py-4 md:py-6 w-[10%]">Fecha</th>
                       </tr>
                     </thead>
-                    <tbody className="text-slate-600 text-[12px] md:text-[14px] divide-y divide-slate-50">
+                    <tbody className="text-slate-600 text-[8.5px] md:text-[10.5px] divide-y divide-slate-50">
                       {filteredDelivery.map((d, idx) => (
                         <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-4 md:px-8 py-4 text-center font-black text-slate-800 text-base md:text-lg">{d.cantidad}</td>
-                          <td className="px-4 md:px-8 py-4 font-bold text-blue-600 uppercase truncate max-w-[150px]">{d.producto}</td>
-                          <td className="px-4 md:px-8 py-4 font-black text-slate-800 uppercase tracking-tight">{d.persona}</td>
-                          <td className="px-4 md:px-8 py-4 font-bold text-slate-800 text-[10px] md:text-[11px] uppercase">{d.seccion}</td>
-                          <td className="px-4 md:px-8 py-4 font-bold text-slate-400 text-[9px] md:text-[10px] uppercase tracking-widest">{d.departamento}</td>
-                          <td className="px-4 md:px-8 py-4 font-bold text-slate-400 text-[10px] md:text-[11px] whitespace-nowrap">{d.fecha}</td>
+                          <td className="px-4 md:px-8 py-3 text-center font-black text-slate-800 text-[11px] md:text-[13px]">{d.cantidad}</td>
+                          <td className="px-4 md:px-8 py-3 font-bold text-blue-600 uppercase truncate">{d.producto}</td>
+                          <td className="px-4 md:px-8 py-3 font-black text-slate-800 uppercase tracking-tight break-words">{d.persona}</td>
+                          <td className="px-4 md:px-8 py-3 font-bold text-slate-800 uppercase truncate">{d.seccion}</td>
+                          <td className="px-4 md:px-8 py-3 font-bold text-slate-400 uppercase tracking-widest break-words">{d.departamento}</td>
+                          <td className="px-4 md:px-8 py-3 font-bold text-slate-400 whitespace-nowrap">{d.fecha}</td>
                         </tr>
                       ))}
                       {filteredDelivery.length === 0 && (
