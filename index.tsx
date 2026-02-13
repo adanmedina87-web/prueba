@@ -329,6 +329,58 @@ const App: React.FC = () => {
     }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
   }, [deliveryData, deliveryFilters]);
 
+  // Lógica de autocompletado inteligente para datos del solicitante
+  const handleSolicitantePersonaChange = (val: string) => {
+    const trimmedVal = val.trim();
+    // Siempre actualizamos el nombre para que la UI responda al instante
+    setSolicitudFilters(prev => {
+      const newState = { ...prev, persona: val };
+      
+      if (trimmedVal !== '') {
+        // Buscamos el último registro histórico de esta persona para autocompletar depto y sección
+        const match = [...deliveryData].reverse().find(d => 
+          d.persona && d.persona.trim().toLowerCase() === trimmedVal.toLowerCase()
+        );
+        
+        if (match) {
+          newState.departamento = match.departamento || prev.departamento;
+          newState.seccion = match.seccion || prev.seccion;
+        }
+      }
+      return newState;
+    });
+  };
+
+  // Función para cargar el pedido anterior
+  const loadPreviousOrder = () => {
+    const personName = solicitudFilters.persona.trim().toLowerCase();
+    if (!personName) return;
+
+    // 1. Filtrar entregas por persona
+    const personDeliveries = deliveryData.filter(d => d.persona.trim().toLowerCase() === personName);
+    if (personDeliveries.length === 0) {
+      alert("No se encontraron pedidos anteriores para esta persona.");
+      return;
+    }
+
+    // 2. Encontrar la fecha más reciente (asumiendo que los pedidos se agrupan por fecha)
+    // Ordenamos descendente por timestamp de fecha
+    const sorted = [...personDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
+    const latestDate = sorted[0].fecha;
+
+    // 3. Tomar todos los ítems de esa persona en esa fecha específica
+    const lastOrderItems = sorted.filter(d => d.fecha === latestDate);
+
+    // 4. Transformar a la estructura de currentOrderItems
+    const newItems = lastOrderItems.map(item => ({
+      producto: item.producto,
+      cantidad: item.cantidad
+    }));
+
+    // 5. Cargar en el estado (mezclar o reemplazar? El usuario pidió cargar en la lista, asumiremos reemplazar/inicializar)
+    setCurrentOrderItems(newItems);
+  };
+
   const addItemToOrder = (p: Product) => {
     const existingIdx = currentOrderItems.findIndex(item => item.producto === p.name);
     if (existingIdx >= 0) {
@@ -506,7 +558,14 @@ const App: React.FC = () => {
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Persona Solicitante</label>
-                    <input type="text" list="personas-list-smart" value={solicitudFilters.persona} onChange={(e) => setSolicitudFilters({...solicitudFilters, persona: e.target.value})} placeholder="Nombre completo" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
+                    <input 
+                      type="text" 
+                      list="personas-list-smart" 
+                      value={solicitudFilters.persona} 
+                      onChange={(e) => handleSolicitantePersonaChange(e.target.value)} 
+                      placeholder="Nombre completo" 
+                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                    />
                     <datalist id="personas-list-smart">
                       {allPossiblePersonas.map(p => <option key={p} value={p} />)}
                     </datalist>
@@ -526,6 +585,18 @@ const App: React.FC = () => {
                     </datalist>
                   </div>
                </div>
+
+               {/* Botón Pedido Anterior - Se muestra si hay una persona seleccionada */}
+               {solicitudFilters.persona.trim() !== '' && (
+                 <div className="mt-6">
+                   <button 
+                     onClick={loadPreviousOrder}
+                     className="bg-blue-50 text-blue-600 font-black px-6 py-3 rounded-xl text-[10px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"
+                   >
+                     <ICONS.Delivery /> PEDIDO ANTERIOR
+                   </button>
+                 </div>
+               )}
             </div>
 
             <div className="flex gap-4">
@@ -623,7 +694,21 @@ const App: React.FC = () => {
         )}
 
         {activeSection === AppSection.SETTINGS && (
-          <div className="max-w-2xl bg-white p-10 rounded-[32px] shadow-sm border border-slate-100 animate-fade-in"><h3 className="text-xl font-black text-slate-800 mb-8 uppercase tracking-widest">Origen de Datos</h3><div className="space-y-6"><div><label className="block text-xs font-black text-slate-700 mb-2 uppercase tracking-widest">URL de Google Sheets (CSV)</label><input type="url" value={sourceLink} onChange={(e) => setSourceLink(e.target.value)} placeholder="https://docs.google.com/spreadsheets/..." className="w-full px-4 py-4 bg-slate-50 border rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold" /></div><button onClick={() => { syncData('inventory'); syncData('delivery'); }} disabled={isSyncing} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-blue-700 transition-all disabled:opacity-50 text-[10px] uppercase tracking-widest">{isSyncing ? 'Conectando...' : 'Recargar Datos del Servidor'}</button></div></div>
+          <div className="max-w-2xl bg-white p-10 rounded-[32px] shadow-sm border border-slate-100 animate-fade-in">
+            <h3 className="text-xl font-black text-slate-800 mb-8 uppercase tracking-widest">Estado del Origen de Datos</h3>
+            <div className="space-y-6">
+              <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 text-center">
+                <span className="text-blue-600 font-black text-2xl uppercase tracking-widest">Actualizado</span>
+              </div>
+              <button 
+                onClick={() => { syncData('inventory'); syncData('delivery'); }} 
+                disabled={isSyncing} 
+                className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-blue-700 transition-all disabled:opacity-50 text-[10px] uppercase tracking-widest"
+              >
+                {isSyncing ? 'Conectando...' : 'Recargar Datos del Servidor'}
+              </button>
+            </div>
+          </div>
         )}
       </main>
 
