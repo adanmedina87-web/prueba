@@ -2,6 +2,30 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
 import { GoogleGenAI } from "@google/genai";
+import { initializeApp } from "firebase/app";
+import { 
+  getDatabase, 
+  ref, 
+  onValue, 
+  push, 
+  update, 
+  remove, 
+  set 
+} from "firebase/database";
+
+// --- CONFIGURACIÓN DE FIREBASE ---
+const firebaseConfig = {
+  apiKey: "AIzaSyCdGGUOd1-SyzHgz3gnC2XUEngI9q-Dl90",
+  authDomain: "bdadan-1c9dc.firebaseapp.com",
+  databaseURL: "https://bdadan-1c9dc-default-rtdb.firebaseio.com",
+  projectId: "bdadan-1c9dc",
+  storageBucket: "bdadan-1c9dc.firebasestorage.app",
+  messagingSenderId: "680803093429",
+  appId: "1:680803093429:web:333faaf62bf0767b49e7fc"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 // --- 1. DEFINICIÓN DE TIPOS ---
 interface Product {
@@ -24,6 +48,15 @@ interface DeliveryRecord {
   departamento: string;
   producto: string;
   cantidad: number;
+}
+
+interface OrderItem {
+  id?: string;
+  producto: string;
+  cantidad: number;
+  persona?: string;
+  departamento?: string;
+  seccion?: string;
 }
 
 interface FinalizedRequest {
@@ -151,7 +184,7 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => query.trim().length > 0 && setIsOpen(true)}
         placeholder={placeholder || "¿Qué activo buscas?"}
-        className="w-full px-4 py-3.5 md:px-5 md:py-4 pl-12 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm text-sm font-bold uppercase tracking-tight"
+        className="w-full px-4 py-3.5 md:px-5 md:py-3 pl-12 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm text-sm font-bold uppercase tracking-tight"
       />
       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
       {isOpen && suggestions.length > 0 && (
@@ -194,35 +227,76 @@ const App: React.FC = () => {
     persona: '', seccion: '', departamento: '', fechaInicio: '', fechaFin: ''
   });
 
-  // Solicitud
+  // Solicitud (Sincronización Realtime Database)
   const [solicitudStep, setSolicitudStep] = useState<'crear' | 'cerrar'>('crear');
   const [solicitudFilters, setSolicitudFilters] = useState(() => {
     const saved = localStorage.getItem('solicitud_filters_v12');
     return saved ? JSON.parse(saved) : { persona: '', departamento: '', seccion: '' };
   });
-  const [currentOrderItems, setCurrentOrderItems] = useState<{producto: string; cantidad: number}[]>(() => {
-    const saved = localStorage.getItem('current_order_items_v12');
-    return saved ? JSON.parse(saved) : [];
-  });
-  const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>(() => {
-    const saved = localStorage.getItem('finalized_requests_v12');
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
+  
+  const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>([]);
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [dbStatusError, setDbStatusError] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Persistencia Local
   useEffect(() => { localStorage.setItem('inv_v4_final', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { localStorage.setItem('inv_link_v4_final', sourceLink); }, [sourceLink]);
   useEffect(() => { localStorage.setItem('del_v4_final', JSON.stringify(deliveryData)); }, [deliveryData]);
-  useEffect(() => { localStorage.setItem('finalized_requests_v12', JSON.stringify(finalizedRequests)); }, [finalizedRequests]);
-  useEffect(() => { localStorage.setItem('current_order_items_v12', JSON.stringify(currentOrderItems)); }, [currentOrderItems]);
   useEffect(() => { localStorage.setItem('solicitud_filters_v12', JSON.stringify(solicitudFilters)); }, [solicitudFilters]);
+
+  // --- Sincronización Realtime Database ---
+  useEffect(() => {
+    // Escuchar pedidos temporales
+    const itemsRef = ref(db, "pedidos_temporales");
+    const unsubscribeItems = onValue(itemsRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const itemsList: OrderItem[] = Object.keys(data).map(key => ({
+          id: key,
+          producto: data[key].producto,
+          cantidad: data[key].cantidad,
+          persona: data[key].persona,
+          departamento: data[key].departamento,
+          seccion: data[key].seccion
+        }));
+        setCurrentOrderItems(itemsList);
+      } else {
+        setCurrentOrderItems([]);
+      }
+      setDbStatusError(null);
+    }, (error) => {
+      console.error("Realtime Database error:", error);
+      setDbStatusError("Error de conexión con la base de datos en tiempo real.");
+    });
+
+    // Escuchar solicitudes finalizadas pendientes por cerrar
+    const finalizedRef = ref(db, "solicitudes_finalizadas");
+    const unsubscribeFinalized = onValue(finalizedRef, (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const list: FinalizedRequest[] = Object.keys(data).map(key => ({
+          id: key,
+          ...data[key]
+        }));
+        setFinalizedRequests(list);
+      } else {
+        setFinalizedRequests([]);
+      }
+    });
+    
+    return () => {
+      unsubscribeItems();
+      unsubscribeFinalized();
+    };
+  }, []);
 
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { if (isChatOpen) scrollToBottom(); }, [chatMessages, isChatOpen]);
@@ -290,7 +364,6 @@ const App: React.FC = () => {
     };
   }, [sourceLink]);
 
-  // --- Información para los filtros consumida EXCLUSIVAMENTE de la hoja solicitada ---
   const allPossiblePersonas = useMemo(() => {
     const set = new Set<string>();
     deliveryData.forEach(d => { if(d.persona) set.add(d.persona); });
@@ -329,19 +402,16 @@ const App: React.FC = () => {
     }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
   }, [deliveryData, deliveryFilters]);
 
-  // Lógica de autocompletado inteligente para datos del solicitante
+  // --- Operaciones CRUD con Realtime Database ---
+
   const handleSolicitantePersonaChange = (val: string) => {
     const trimmedVal = val.trim();
-    // Siempre actualizamos el nombre para que la UI responda al instante
     setSolicitudFilters(prev => {
       const newState = { ...prev, persona: val };
-      
       if (trimmedVal !== '') {
-        // Buscamos el último registro histórico de esta persona para autocompletar depto y sección
         const match = [...deliveryData].reverse().find(d => 
           d.persona && d.persona.trim().toLowerCase() === trimmedVal.toLowerCase()
         );
-        
         if (match) {
           newState.departamento = match.departamento || prev.departamento;
           newState.seccion = match.seccion || prev.seccion;
@@ -351,56 +421,88 @@ const App: React.FC = () => {
     });
   };
 
-  // Función para cargar el pedido anterior
-  const loadPreviousOrder = () => {
+  const clearTemporaryOrders = async () => {
+    try {
+      const itemsRef = ref(db, "pedidos_temporales");
+      await remove(itemsRef);
+    } catch (err) {
+      console.error("Error clearing orders:", err);
+    }
+  };
+
+  const loadPreviousOrder = async () => {
     const personName = solicitudFilters.persona.trim().toLowerCase();
     if (!personName) return;
 
-    // 1. Filtrar entregas por persona
     const personDeliveries = deliveryData.filter(d => d.persona.trim().toLowerCase() === personName);
     if (personDeliveries.length === 0) {
       alert("No se encontraron pedidos anteriores para esta persona.");
       return;
     }
 
-    // 2. Encontrar la fecha más reciente (asumiendo que los pedidos se agrupan por fecha)
-    // Ordenamos descendente por timestamp de fecha
     const sorted = [...personDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
     const latestDate = sorted[0].fecha;
+    const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate);
 
-    // 3. Tomar todos los ítems de esa persona en esa fecha específica
-    const lastOrderItems = sorted.filter(d => d.fecha === latestDate);
+    await clearTemporaryOrders();
 
-    // 4. Transformar a la estructura de currentOrderItems
-    const newItems = lastOrderItems.map(item => ({
+    const itemsRef = ref(db, "pedidos_temporales");
+    const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, {
       producto: item.producto,
-      cantidad: item.cantidad
+      cantidad: item.cantidad,
+      persona: solicitudFilters.persona,
+      departamento: solicitudFilters.departamento,
+      seccion: solicitudFilters.seccion
     }));
-
-    // 5. Cargar en el estado (mezclar o reemplazar? El usuario pidió cargar en la lista, asumiremos reemplazar/inicializar)
-    setCurrentOrderItems(newItems);
+    await Promise.all(addPromises);
   };
 
-  const addItemToOrder = (p: Product) => {
-    const existingIdx = currentOrderItems.findIndex(item => item.producto === p.name);
-    if (existingIdx >= 0) {
-      const newList = [...currentOrderItems];
-      newList[existingIdx].cantidad += 1;
-      setCurrentOrderItems(newList);
-    } else {
-      setCurrentOrderItems(prev => [...prev, { producto: p.name, cantidad: 1 }]);
+  const addItemToOrder = async (p: Product) => {
+    const { persona, departamento, seccion } = solicitudFilters;
+    try {
+      // Intentar encontrar si ya existe para este solicitante
+      const existing = currentOrderItems.find(item => 
+        item.producto === p.name && 
+        item.persona === persona
+      );
+
+      if (existing && existing.id) {
+        const itemRef = ref(db, `pedidos_temporales/${existing.id}`);
+        await update(itemRef, {
+          cantidad: existing.cantidad + 1
+        });
+      } else {
+        const itemsRef = ref(db, "pedidos_temporales");
+        await push(itemsRef, {
+          producto: p.name,
+          cantidad: 1,
+          persona,
+          departamento,
+          seccion
+        });
+      }
+    } catch (err) {
+      console.error("Add item error:", err);
+      alert("Error al sincronizar con la base de datos.");
     }
   };
 
-  const updateItemQuantity = (idx: number, delta: number) => {
-    const newList = [...currentOrderItems];
-    const newVal = newList[idx].cantidad + delta;
-    if (newVal <= 0) {
-      newList.splice(idx, 1);
-    } else {
-      newList[idx].cantidad = newVal;
+  const updateItemQuantity = async (idx: number, delta: number) => {
+    try {
+      const item = currentOrderItems[idx];
+      if (!item || !item.id) return;
+      const newVal = item.cantidad + delta;
+      const itemRef = ref(db, `pedidos_temporales/${item.id}`);
+      if (newVal <= 0) {
+        await remove(itemRef);
+      } else {
+        await update(itemRef, {
+          cantidad: newVal
+        });
+      }
+    } catch (err) {
+      console.error("Update item error:", err);
     }
-    setCurrentOrderItems(newList);
   };
 
   const finalizarPedido = async () => {
@@ -409,29 +511,48 @@ const App: React.FC = () => {
       alert("Por favor completa los campos de Persona, Departamento y Sección antes de finalizar.");
       return;
     }
-    if (currentOrderItems.length === 0) {
-      alert("El pedido está vacío. Añade productos usando el buscador.");
+
+    // Filtrar los ítems que pertenecen a esta persona específica
+    const userItems = currentOrderItems.filter(i => i.persona === persona);
+
+    if (userItems.length === 0) {
+      alert("No tienes productos en tu lista temporal. Añade productos usando el buscador.");
       return;
     }
 
     const fechaActual = new Date().toLocaleDateString('es-ES');
-    const newRequest: FinalizedRequest = {
-      id: `REQ-${Date.now()}-${Math.floor(Math.random()*1000)}`,
+    const itemsFormatted = userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad }));
+    
+    const newRequestData = {
       persona: persona.trim(),
       departamento: departamento.trim(),
       seccion: seccion.trim(),
       fecha: fechaActual,
-      items: [...currentOrderItems]
+      items: itemsFormatted
     };
 
-    setFinalizedRequests(prev => [...prev, newRequest]);
-    setCurrentOrderItems([]);
-    setSolicitudFilters({ persona: '', departamento: '', seccion: '' });
-    setSolicitudStep('cerrar');
-    alert("Pedido guardado. Presiona OK para confirmar el envío.");
+    try {
+      // Guardar en Firebase node para solicitudes por cerrar
+      const finalizedRef = ref(db, "solicitudes_finalizadas");
+      await push(finalizedRef, newRequestData);
+
+      // Limpiar los items temporales de esta persona de Firebase
+      for (const item of userItems) {
+        if (item.id) {
+          await remove(ref(db, `pedidos_temporales/${item.id}`));
+        }
+      }
+
+      setSolicitudFilters({ persona: '', departamento: '', seccion: '' });
+      setSolicitudStep('cerrar');
+      alert("Pedido enviado a la cola de cierre.");
+    } catch (err) {
+      console.error("Error finalizing:", err);
+      alert("Error al guardar el pedido en la nube.");
+    }
   };
 
-  const handleConfirmOk = (req: FinalizedRequest) => {
+  const handleConfirmOk = async (req: FinalizedRequest) => {
     try {
       const detalleProductos = req.items.map(i => `${i.producto}: ${i.cantidad}`).join(', ');
       const params = new URLSearchParams({
@@ -442,18 +563,26 @@ const App: React.FC = () => {
         fecha: req.fecha,
         ticket_id: req.id
       });
-      fetch(`${MAKE_WEBHOOK_URL}?${params.toString()}`).catch(err => console.error("Webhook error:", err));
-      setFinalizedRequests(prev => prev.filter(r => r.id !== req.id));
+      
+      const response = await fetch(`${MAKE_WEBHOOK_URL}?${params.toString()}`);
+      
+      if (response.ok) {
+        // Eliminar de Firebase ya que se envió a Make
+        const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`);
+        await remove(reqRef);
+      } else {
+        alert("Hubo un error al enviar el pedido al servidor central.");
+      }
     } catch (e) {
       console.error("Error procesando acción OK:", e);
-      setFinalizedRequests(prev => prev.filter(r => r.id !== req.id));
+      alert("Error de red al conectar con Make.");
     }
   };
 
   const askAi = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = e.currentTarget;
-    const query = new FormData(form).get('q') as string;
+    const query = new FormData(form).get('ai-query') as string;
     if (!query) return;
     const newUserMsg: ChatMessage = { role: 'user', text: query, timestamp: new Date() };
     setChatMessages(prev => [...prev, newUserMsg]);
@@ -483,6 +612,16 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#f8fafc] pb-24 md:pb-0 font-['Plus_Jakarta_Sans']">
+      
+      {/* Alerta de Error de Base de Datos */}
+      {dbStatusError && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-rose-600 text-white p-4 text-center text-xs font-black uppercase tracking-widest animate-fade-in flex items-center justify-center gap-4">
+          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          {dbStatusError}
+          <button onClick={() => window.location.reload()} className="bg-white text-rose-600 px-3 py-1 rounded-md text-[10px]">REINTENTAR</button>
+        </div>
+      )}
+
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col fixed h-full z-20 shadow-sm">
         <div className="p-8 flex items-center gap-4"><CustomLogo /><h1 className="font-black text-base text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-sm">Bodega</span></h1></div>
         <nav className="flex-1 px-5 space-y-2 mt-2">
@@ -494,10 +633,10 @@ const App: React.FC = () => {
         </nav>
       </aside>
 
-      <main className="flex-1 md:ml-64 p-4 md:p-12 max-w-6xl mx-auto w-full">
+      <main className={`flex-1 md:ml-64 p-4 md:p-12 max-w-6xl mx-auto w-full ${dbStatusError ? 'pt-24' : ''}`}>
         <header className="flex justify-between items-center mb-6 md:mb-10">
           <div className="hidden md:block">
-            <h2 className="text-2xl md:text-3xl font-black text-slate-800 tracking-tighter uppercase leading-none">
+            <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tighter uppercase leading-none">
               {activeSection === AppSection.DASHBOARD && 'Vista General'}
               {activeSection === AppSection.QUERY && 'Consultas de Activos'}
               {activeSection === AppSection.SOLICITUD && 'Gestión de Solicitudes'}
@@ -518,7 +657,7 @@ const App: React.FC = () => {
             {!isChatOpen ? (
               <button onClick={() => setIsChatOpen(true)} className="w-full bg-blue-600 p-8 md:p-10 rounded-[32px] md:rounded-[40px] shadow-2xl text-white flex items-center justify-between group hover:bg-blue-700 transition-all active:translate-y-1"><div className="text-left"><h4 className="text-lg md:text-2xl font-black uppercase tracking-tighter leading-none mb-2 md:mb-3">Asistente Logístico IA</h4><p className="text-blue-100 text-[11px] md:text-[13px] opacity-90 uppercase tracking-widest font-bold">Resuelve dudas sobre stock.</p></div><div className="bg-white/20 p-4 md:p-5 rounded-2xl group-hover:scale-110 transition-transform"><ICONS.Search /></div></button>
             ) : (
-              <div className="bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col h-[400px] md:h-[500px] animate-fade-in"><div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><span className="font-black text-[10px] uppercase tracking-widest text-slate-500">IA Bodega</span><button onClick={() => setIsChatOpen(false)} className="text-slate-400 p-2 hover:bg-slate-200 rounded-xl"><ICONS.ExternalLink /></button></div><div className="flex-1 overflow-y-auto p-4 space-y-4">{chatMessages.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] px-4 py-2 rounded-2xl text-[13px] font-bold ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}>{msg.text}</div></div>))}<div ref={chatEndRef} /></div><form onSubmit={askAi} className="p-4 border-t border-slate-100 flex gap-2"><input name="q" placeholder="Pregunta algo..." className="flex-1 bg-slate-50 border rounded-xl px-4 py-3 outline-none text-sm font-bold uppercase" /><button className="bg-blue-600 text-white px-4 rounded-xl shadow-xl"><ICONS.Search /></button></form></div>
+              <div className="bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col h-[400px] md:h-[500px] animate-fade-in"><div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><span className="font-black text-[10px] uppercase tracking-widest text-slate-500">IA Bodega</span><button onClick={() => setIsChatOpen(false)} className="text-slate-400 p-2 hover:bg-slate-200 rounded-xl"><ICONS.ExternalLink /></button></div><div className="flex-1 overflow-y-auto p-4 space-y-4">{chatMessages.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] px-4 py-2 rounded-2xl text-[13px] font-bold ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}>{msg.text}</div></div>))}<div ref={chatEndRef} /></div><form onSubmit={askAi} className="p-4 border-t border-slate-100 flex gap-2"><input name="ai-query" placeholder="Pregunta algo..." className="flex-1 bg-slate-50 border rounded-xl px-4 py-3 outline-none text-sm font-bold uppercase" /><button className="bg-blue-600 text-white px-4 rounded-xl shadow-xl"><ICONS.Search /></button></form></div>
             )}
           </div>
         )}
@@ -549,49 +688,49 @@ const App: React.FC = () => {
         )}
 
         {activeSection === AppSection.SOLICITUD && (
-          <div className="animate-fade-in space-y-6 md:space-y-10">
-            <div className="bg-white p-6 md:p-10 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100">
-               <div className="flex justify-between items-center mb-6">
-                 <h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-widest">Información del Solicitante</h3>
-                 <button onClick={() => setSolicitudFilters({ persona: '', departamento: '', seccion: '' })} className="text-rose-500 font-bold text-[9px] uppercase hover:underline">LIMPIAR CAMPOS</button>
+          <div className="animate-fade-in space-y-4">
+            {/* Información del Solicitante - Más compacta */}
+            <div className="bg-white p-4 md:p-6 rounded-[24px] shadow-sm border border-slate-100">
+               <div className="flex justify-between items-center mb-4">
+                 <h3 className="font-black text-slate-800 text-[10px] md:text-xs uppercase tracking-widest">Solicitante</h3>
+                 <button onClick={() => setSolicitudFilters({ persona: '', departamento: '', seccion: '' })} className="text-rose-500 font-bold text-[8px] uppercase hover:underline">LIMPIAR</button>
                </div>
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Persona Solicitante</label>
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Persona</label>
                     <input 
                       type="text" 
                       list="personas-list-smart" 
                       value={solicitudFilters.persona} 
                       onChange={(e) => handleSolicitantePersonaChange(e.target.value)} 
-                      placeholder="Nombre completo" 
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
+                      placeholder="Nombre..." 
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
                     />
                     <datalist id="personas-list-smart">
                       {allPossiblePersonas.map(p => <option key={p} value={p} />)}
                     </datalist>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Departamento</label>
-                    <input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="Escribe departamento..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Departamento</label>
+                    <input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="Depto..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
                     <datalist id="deptos-list-smart">
                       {allPossibleDeptos.map(d => <option key={d} value={d} />)}
                     </datalist>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sección / Área</label>
-                    <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => setSolicitudFilters({...solicitudFilters, seccion: e.target.value})} placeholder="Escribe sección..." className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sección</label>
+                    <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => setSolicitudFilters({...solicitudFilters, seccion: e.target.value})} placeholder="Sección..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
                     <datalist id="secciones-list-smart">
                       {allPossibleSecciones.map(s => <option key={s} value={s} />)}
                     </datalist>
                   </div>
                </div>
 
-               {/* Botón Pedido Anterior - Se muestra si hay una persona seleccionada */}
                {solicitudFilters.persona.trim() !== '' && (
-                 <div className="mt-6">
+                 <div className="mt-3">
                    <button 
                      onClick={loadPreviousOrder}
-                     className="bg-blue-50 text-blue-600 font-black px-6 py-3 rounded-xl text-[10px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"
+                     className="bg-blue-50 text-blue-600 font-black px-4 py-2 rounded-lg text-[8px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"
                    >
                      <ICONS.Delivery /> PEDIDO ANTERIOR
                    </button>
@@ -599,65 +738,77 @@ const App: React.FC = () => {
                )}
             </div>
 
-            <div className="flex gap-4">
-              <button onClick={() => setSolicitudStep('crear')} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all ${solicitudStep === 'crear' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Crear Pedido</button>
-              <button onClick={() => setSolicitudStep('cerrar')} className={`flex-1 py-4 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] transition-all relative ${solicitudStep === 'cerrar' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Cerrar Pedido {finalizedRequests.length > 0 && <span className="ml-2 bg-rose-500 text-white px-2 rounded-full">{finalizedRequests.length}</span>}</button>
+            {/* Tabs - Más pequeñas */}
+            <div className="flex gap-2">
+              <button onClick={() => setSolicitudStep('crear')} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-[0.15em] transition-all ${solicitudStep === 'crear' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Crear Pedido</button>
+              <button onClick={() => setSolicitudStep('cerrar')} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-[0.15em] transition-all relative ${solicitudStep === 'cerrar' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Cerrar Pedido {finalizedRequests.length > 0 && <span className="ml-1 bg-rose-500 text-white px-1.5 rounded-full text-[8px]">{finalizedRequests.length}</span>}</button>
             </div>
 
             {solicitudStep === 'crear' && (
-              <div className="space-y-8 animate-fade-in">
-                <div className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm">
-                  <h4 className="text-xs font-black text-slate-800 uppercase mb-4 tracking-widest">Añadir Activos</h4>
-                  <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Busca y toca para añadir..." />
+              <div className="space-y-4 animate-fade-in">
+                {/* Añadir Activos - Más directo */}
+                <div className="bg-white p-4 md:p-6 rounded-[24px] border border-slate-100 shadow-sm">
+                  <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-widest">Añadir Activos</h4>
+                  <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe para añadir rápido..." />
                 </div>
 
-                {currentOrderItems.length > 0 && (
-                  <div className="bg-white rounded-[32px] border shadow-sm overflow-hidden animate-fade-in">
-                    <div className="p-6 bg-slate-50 border-b flex justify-between items-center"><h4 className="font-black text-slate-800 text-[10px] uppercase tracking-widest">Lista Temporal del Pedido</h4><button onClick={() => setCurrentOrderItems([])} className="text-rose-500 font-bold text-[9px] uppercase">LIMPIAR LISTA</button></div>
+                {currentOrderItems.filter(i => i.persona === solicitudFilters.persona).length > 0 && (
+                  <div className="bg-white rounded-[24px] border shadow-sm overflow-hidden animate-fade-in">
+                    <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
+                      <h4 className="font-black text-slate-800 text-[9px] uppercase tracking-widest">Lista Temporal</h4>
+                      <button onClick={clearTemporaryOrders} className="text-rose-500 font-bold text-[8px] uppercase">LIMPIAR LISTA</button>
+                    </div>
                     <div className="divide-y divide-slate-50">
-                      {currentOrderItems.map((item, i) => (
-                        <div key={i} className="p-4 md:p-6 flex justify-between items-center">
-                          <div className="flex items-center gap-4">
-                            <span className="font-bold text-slate-800 text-sm uppercase">{item.producto}</span>
+                      {currentOrderItems.filter(i => i.persona === solicitudFilters.persona).map((item, i) => (
+                        <div key={item.id || i} className="p-3 md:p-4 flex justify-between items-center">
+                          <div className="flex items-center gap-3">
+                            <span className="font-bold text-slate-800 text-xs uppercase">{item.producto}</span>
                           </div>
-                          <div className="flex items-center gap-4">
-                             <button onClick={() => updateItemQuantity(i, -1)} className="bg-slate-100 p-2 rounded-lg hover:bg-rose-100 transition-colors"><ICONS.Minus /></button>
-                             <span className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-black text-sm w-12 text-center">{item.cantidad}</span>
-                             <button onClick={() => updateItemQuantity(i, 1)} className="bg-slate-100 p-2 rounded-lg hover:bg-blue-100 transition-colors"><ICONS.Plus /></button>
+                          <div className="flex items-center gap-3">
+                             <button onClick={() => {
+                               const actualIdx = currentOrderItems.indexOf(item);
+                               updateItemQuantity(actualIdx, -1);
+                             }} className="bg-slate-100 p-1.5 rounded-lg hover:bg-rose-100 transition-colors scale-90"><ICONS.Minus /></button>
+                             <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-black text-xs w-10 text-center">{item.cantidad}</span>
+                             <button onClick={() => {
+                               const actualIdx = currentOrderItems.indexOf(item);
+                               updateItemQuantity(actualIdx, 1);
+                             }} className="bg-slate-100 p-1.5 rounded-lg hover:bg-blue-100 transition-colors scale-90"><ICONS.Plus /></button>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <div className="p-8"><button onClick={finalizarPedido} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-5 rounded-2xl text-[10px] uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all flex items-center justify-center gap-4">FINALIZAR Y GUARDAR PEDIDO</button></div>
+                    <div className="p-4 bg-slate-50 border-t">
+                      <button onClick={finalizarPedido} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl text-[9px] uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">FINALIZAR PEDIDO</button>
+                    </div>
                   </div>
                 )}
               </div>
             )}
 
             {solicitudStep === 'cerrar' && (
-              <div className="space-y-6 animate-fade-in">
+              <div className="space-y-4 animate-fade-in">
                 {finalizedRequests.length === 0 ? (
-                  <div className="bg-white p-20 rounded-[40px] border text-center flex flex-col items-center">
-                    <div className="bg-slate-50 p-6 rounded-full mb-6"><ICONS.Solicitud /></div>
-                    <p className="font-black text-slate-300 text-[10px] uppercase tracking-widest">No hay pedidos pendientes por cerrar</p>
+                  <div className="bg-white p-10 rounded-[24px] border text-center flex flex-col items-center">
+                    <div className="bg-slate-50 p-4 rounded-full mb-4"><ICONS.Solicitud /></div>
+                    <p className="font-black text-slate-300 text-[8px] uppercase tracking-widest">No hay pedidos pendientes</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {finalizedRequests.map((req) => (
-                      <div key={req.id} className="bg-white rounded-[32px] border shadow-xl overflow-hidden flex flex-col animate-fade-in">
-                        <div className="p-6 md:p-8 bg-blue-50 border-b">
-                          <div className="flex justify-between items-center mb-4"><span className="bg-white px-3 py-1 rounded-full font-black text-[8px] text-blue-600 uppercase tracking-widest">TICKET #{req.id.split('-').pop()}</span><span className="text-[10px] font-bold text-slate-400">{req.fecha}</span></div>
-                          <h4 className="font-black text-slate-800 text-lg uppercase leading-none tracking-tight">{req.persona}</h4>
-                          <p className="text-[9px] font-bold text-blue-600 uppercase tracking-widest mt-2">{req.departamento} | {req.seccion}</p>
+                      <div key={req.id} className="bg-white rounded-[24px] border shadow-md overflow-hidden flex flex-col animate-fade-in">
+                        <div className="p-4 bg-blue-50 border-b">
+                          <div className="flex justify-between items-center mb-2"><span className="bg-white px-2 py-0.5 rounded-full font-black text-[7px] text-blue-600 uppercase tracking-widest">#{req.id.split('-').pop()}</span><span className="text-[8px] font-bold text-slate-400">{req.fecha}</span></div>
+                          <h4 className="font-black text-slate-800 text-sm uppercase leading-none tracking-tight">{req.persona}</h4>
+                          <p className="text-[7px] font-bold text-blue-600 uppercase tracking-widest mt-1 truncate">{req.departamento} | {req.seccion}</p>
                         </div>
-                        <div className="p-6 md:p-8 flex-1 space-y-3">
-                          <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Detalle de Solicitud</p>
+                        <div className="p-4 flex-1 space-y-2">
                           {req.items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-xs font-bold border-b pb-2"><span className="text-slate-800 uppercase">{item.producto}</span><span className="bg-slate-50 px-2 py-1 rounded-md text-blue-600 font-black">x{item.cantidad}</span></div>
+                            <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-dashed pb-1"><span className="text-slate-800 uppercase truncate pr-2">{item.producto}</span><span className="text-blue-600 font-black">x{item.cantidad}</span></div>
                           ))}
                         </div>
-                        <div className="p-6 md:p-8 bg-slate-50">
-                          <button onClick={() => handleConfirmOk(req)} className="w-full bg-blue-600 text-white font-black py-4 rounded-xl text-[10px] uppercase tracking-widest shadow-lg flex items-center justify-center gap-2 border-b-4 border-blue-800 active:scale-95 transition-all">OK</button>
+                        <div className="p-4 bg-slate-50">
+                          <button onClick={() => handleConfirmOk(req)} className="w-full bg-blue-600 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-blue-800 active:scale-95 transition-all">OK</button>
                         </div>
                       </div>
                     ))}
@@ -695,7 +846,7 @@ const App: React.FC = () => {
 
         {activeSection === AppSection.SETTINGS && (
           <div className="max-w-2xl bg-white p-10 rounded-[32px] shadow-sm border border-slate-100 animate-fade-in">
-            <h3 className="text-xl font-black text-slate-800 mb-8 uppercase tracking-widest">Estado del Origen de Datos</h3>
+            <h3 className="text-xl font-bold text-slate-800 mb-8 uppercase tracking-widest">Estado del Origen de Datos</h3>
             <div className="space-y-6">
               <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 text-center">
                 <span className="text-blue-600 font-black text-2xl uppercase tracking-widest">Actualizado</span>
@@ -715,8 +866,10 @@ const App: React.FC = () => {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-50 shadow-2xl">
         {navItems.map((item) => (
           <button key={item.id} onClick={() => setActiveSection(item.id)} className={`flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
-            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl shadow-inner' : ''}`}>{item.icon}</div>
-            <span className="text-[10px] font-black uppercase tracking-tighter">{item.label}</span>
+            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl shadow-inner' : ''}`}>
+              {item.icon}
+            </div>
+            <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
           </button>
         ))}
       </nav>
