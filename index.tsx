@@ -83,9 +83,10 @@ enum AppSection {
 }
 
 // --- 2. CONSTANTES E ICONOS ---
-const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1PyR211FL1fAOqSYmMhsh7c7hY4jOfQRAwuQxhAqD_Zk/edit?usp=sharing';
+// Se actualiza el link predeterminado para el inventario según la nueva URL proporcionada (gid=507872400)
+const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit#gid=507872400';
 const DELIVERY_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?usp=sharing';
-const MAKE_WEBHOOK_URL = 'https://hook.us2.make.com/am0ogm35y4ajnw2bcyq9nc5tglktj2kc';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9R2ocvOKfUpf78kVjZxG9EL5tbGxqtvu2Y-YeM7ADGbA41JdHdJ0GRmCJ3Qh8-LY/exec';
 
 const CustomLogo = () => (
   <img 
@@ -307,7 +308,16 @@ const App: React.FC = () => {
     if (!silent) setIsSyncing(true);
     try {
       let url = link;
-      if (url.includes('/edit')) url = url.split('/edit')[0] + '/export?format=csv';
+      if (url.includes('/edit')) {
+        const baseUrl = url.split('/edit')[0];
+        // Extraer gid de la URL original (parámetro query o fragmento hash)
+        const gidMatch = url.match(/[?#&]gid=([0-9]+)/);
+        const gid = gidMatch ? gidMatch[1] : '';
+        url = `${baseUrl}/export?format=csv${gid ? `&gid=${gid}` : ''}`;
+      } else if (!url.includes('/export')) {
+        url = url.replace(/\/$/, '') + '/export?format=csv';
+      }
+      
       const res = await fetch(url);
       const text = await res.text();
       if (text.includes('<html') || text.trim() === '') throw new Error("Hoja no pública");
@@ -521,61 +531,64 @@ const App: React.FC = () => {
     }
 
     const fechaActual = new Date().toLocaleDateString('es-ES');
-    const itemsFormatted = userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad }));
     
     const newRequestData = {
       persona: persona.trim(),
       departamento: departamento.trim(),
       seccion: seccion.trim(),
       fecha: fechaActual,
-      items: itemsFormatted
+      items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad }))
     };
 
     try {
-      // Guardar en Firebase node para solicitudes por cerrar
+      // 1. Guardar en Firebase para que todos puedan ver el pedido pendiente de cierre
       const finalizedRef = ref(db, "solicitudes_finalizadas");
       await push(finalizedRef, newRequestData);
 
-      // Limpiar los items temporales de esta persona de Firebase
+      // 2. Limpiar los items temporales de esta persona de la nube
       for (const item of userItems) {
         if (item.id) {
           await remove(ref(db, `pedidos_temporales/${item.id}`));
         }
       }
 
+      // 3. Resetear estados locales
       setSolicitudFilters({ persona: '', departamento: '', seccion: '' });
       setSolicitudStep('cerrar');
-      alert("Pedido enviado a la cola de cierre.");
+      alert("Pedido finalizado y guardado en la nube. Pendiente de cierre.");
     } catch (err) {
-      console.error("Error finalizing:", err);
+      console.error("Error al finalizar:", err);
       alert("Error al guardar el pedido en la nube.");
     }
   };
 
   const handleConfirmOk = async (req: FinalizedRequest) => {
     try {
-      const detalleProductos = req.items.map(i => `${i.producto}: ${i.cantidad}`).join(', ');
-      const params = new URLSearchParams({
+      const dataToSend = {
         persona: req.persona,
         departamento: req.departamento,
         seccion: req.seccion,
-        productos: detalleProductos,
-        fecha: req.fecha,
-        ticket_id: req.id
+        items: req.items
+      };
+      
+      // 1. Enviar al Webhook de App Script
+      await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(dataToSend)
       });
       
-      const response = await fetch(`${MAKE_WEBHOOK_URL}?${params.toString()}`);
-      
-      if (response.ok) {
-        // Eliminar de Firebase ya que se envió a Make
-        const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`);
-        await remove(reqRef);
-      } else {
-        alert("Hubo un error al enviar el pedido al servidor central.");
-      }
+      // 2. Eliminar de Firebase ya que se procesó (se asume enviado con éxito)
+      const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`);
+      await remove(reqRef);
+
+      alert("Pedido cerrado y enviado a la hoja de cálculo.");
     } catch (e) {
       console.error("Error procesando acción OK:", e);
-      alert("Error de red al conectar con Make.");
+      alert("Error de red al conectar con el servidor.");
     }
   };
 
