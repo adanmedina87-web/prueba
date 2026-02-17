@@ -3,7 +3,35 @@ import React, { useState, useEffect } from 'react';
 import { Product, AppSection } from './types';
 import { INITIAL_INVENTORY, ICONS } from './constants';
 import { AutocompleteSearch } from './components/AutocompleteSearch';
-import { getInventoryInsights } from './services/gemini';
+import { getInventoryInsights, getCalendarEvents } from './services/gemini';
+
+const CALENDAR_URL = 'https://calendar.google.com/calendar/embed?src=maristas.cl_nibj9c200dlhn4ikddt9g41lgg%40group.calendar.google.com&ctz=America%2FSantiago';
+
+const NewsTicker: React.FC<{ news: string }> = ({ news }) => {
+  if (!news || news === '') return null;
+  
+  // Clean news text for display
+  const cleanNews = news.replace(/\n/g, '  •  ').replace(/\*/g, '');
+  
+  // Dynamic duration based on content length
+  const duration = Math.max(20, Math.floor(cleanNews.length / 8));
+
+  return (
+    <div className="w-full bg-emerald-600 text-white py-2.5 overflow-hidden relative border-y border-emerald-500 mb-6 rounded-2xl shadow-inner">
+      <div 
+        className="flex animate-marquee whitespace-nowrap"
+        style={{ animationDuration: `${duration}s` }}
+      >
+        <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] px-8">
+          {cleanNews}
+        </span>
+        <span className="text-[10px] md:text-[11px] font-bold uppercase tracking-[0.2em] px-8">
+          {cleanNews}
+        </span>
+      </div>
+    </div>
+  );
+};
 
 const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.DASHBOARD);
@@ -17,6 +45,7 @@ const App: React.FC = () => {
   const [aiLoading, setAiLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncStatus, setSyncStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
+  const [tickerNews, setTickerNews] = useState<string>('');
 
   useEffect(() => {
     localStorage.setItem('inventory_data', JSON.stringify(inventory));
@@ -25,6 +54,15 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem('inventory_source_link', sourceLink);
   }, [sourceLink]);
+
+  // Fetch calendar info once on load
+  useEffect(() => {
+    const fetchCalendar = async () => {
+      const activities = await getCalendarEvents(CALENDAR_URL);
+      setTickerNews(activities);
+    };
+    fetchCalendar();
+  }, []);
 
   const calculateTimeInInventory = (date: string) => {
     if (!date || date === 'N/A') return "Recién ingresado";
@@ -197,49 +235,54 @@ const App: React.FC = () => {
         </header>
 
         {activeSection === AppSection.DASHBOARD && (
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6 animate-fade-in">
-            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100">
-              <p className="text-slate-400 text-xs md:text-sm font-medium">Activos</p>
-              <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">{inventory.length}</h3>
-            </div>
-            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100">
-              <p className="text-slate-400 text-xs md:text-sm font-medium">Stock Total</p>
-              <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">
-                {inventory.reduce((acc, curr) => acc + (curr.quantity || 0), 0)}
-              </h3>
-            </div>
-            <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 col-span-2 md:col-span-1">
-              <p className="text-slate-400 text-xs md:text-sm font-medium">Zonas</p>
-              <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">
-                {new Set(inventory.map(i => i.location)).size}
-              </h3>
-            </div>
+          <div className="space-y-6 md:space-y-10 animate-fade-in">
+            {/* Calendar Ticker */}
+            <NewsTicker news={tickerNews} />
 
-            <div className="col-span-2 md:col-span-3 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 mt-2 md:mt-6">
-              <div className="flex items-center gap-3 mb-4 md:mb-6">
-                <div className="w-8 h-8 bg-purple-100 text-purple-600 flex items-center justify-center rounded-lg">
-                  <ICONS.Search />
-                </div>
-                <h4 className="font-bold text-base md:text-lg text-slate-800">Asistente IA</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+              <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p className="text-slate-400 text-xs md:text-sm font-medium">Activos</p>
+                <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">{inventory.length}</h3>
               </div>
-              <form onSubmit={handleAiQuery} className="flex flex-col gap-3">
-                <input 
-                  name="ai-query"
-                  placeholder="¿Dónde está el monitor?"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:py-4 focus:ring-2 focus:ring-purple-500 outline-none transition-all text-sm"
-                />
-                <button 
-                  disabled={aiLoading}
-                  className="w-full md:w-auto bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm"
-                >
-                  {aiLoading ? 'Calculando...' : 'Preguntar'}
-                </button>
-              </form>
-              {aiResponse && (
-                <div className="mt-4 p-4 bg-purple-50 rounded-xl border border-purple-100 text-slate-700 animate-fade-in text-sm leading-relaxed">
-                  {aiResponse}
+              <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100">
+                <p className="text-slate-400 text-xs md:text-sm font-medium">Stock Total</p>
+                <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">
+                  {inventory.reduce((acc, curr) => acc + (curr.quantity || 0), 0)}
+                </h3>
+              </div>
+              <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 col-span-2 md:col-span-1">
+                <p className="text-slate-400 text-xs md:text-sm font-medium">Zonas</p>
+                <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">
+                  {new Set(inventory.map(i => i.location)).size}
+                </h3>
+              </div>
+
+              <div className="col-span-2 md:col-span-3 bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 mt-2 md:mt-6">
+                <div className="flex items-center gap-3 mb-4 md:mb-6">
+                  <div className="w-8 h-8 bg-purple-100 text-purple-600 flex items-center justify-center rounded-lg">
+                    <ICONS.Search />
+                  </div>
+                  <h4 className="font-bold text-base md:text-lg text-slate-800">Asistente IA</h4>
                 </div>
-              )}
+                <form onSubmit={handleAiQuery} className="flex flex-col gap-3">
+                  <input 
+                    name="ai-query"
+                    placeholder="¿Dónde está el monitor?"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 md:py-4 focus:ring-2 focus:ring-purple-500 outline-none transition-all text-sm"
+                  />
+                  <button 
+                    disabled={aiLoading}
+                    className="w-full md:w-auto bg-purple-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-purple-700 disabled:opacity-50 transition-colors text-sm"
+                  >
+                    {aiLoading ? 'Calculando...' : 'Preguntar'}
+                  </button>
+                </form>
+                {aiResponse && (
+                  <div className="mt-4 p-4 bg-purple-50 rounded-xl border border-purple-100 text-slate-700 animate-fade-in text-sm leading-relaxed">
+                    {aiResponse}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}

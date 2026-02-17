@@ -21,7 +21,7 @@ const firebaseConfig = {
   projectId: "bdadan-1c9dc",
   storageBucket: "bdadan-1c9dc.firebasestorage.app",
   messagingSenderId: "680803093429",
-  appId: "1:680803093429:web:333faaf62bf0767b49e7fc"
+  appId: "1:1:680803093429:web:333faaf62bf0767b49e7fc"
 };
 
 const app = initializeApp(firebaseConfig);
@@ -106,7 +106,8 @@ const ICONS = {
   Trash: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
   Check: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>,
   Plus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>,
-  Minus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" /></svg>
+  Minus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" /></svg>,
+  ChevronDown: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
 };
 
 // --- 3. FUNCIONES DE UTILIDAD ---
@@ -159,7 +160,20 @@ const formatImageUrl = (url: string) => {
 
 // --- 4. COMPONENTES VISUALES ---
 
-const PieChart3D: React.FC<{ data: { name: string, total: number }[], globalTotal?: number }> = ({ data, globalTotal }) => {
+interface SectionBreakdown {
+  name: string;
+  quantity: number;
+  percent: number;
+}
+
+interface ProductStat {
+  name: string;
+  total: number;
+  sections: SectionBreakdown[];
+}
+
+const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ data, globalTotal }) => {
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const localSum = data.reduce((sum, item) => sum + item.total, 0);
   const displayTotal = globalTotal || localSum;
   const colors = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
@@ -220,23 +234,58 @@ const PieChart3D: React.FC<{ data: { name: string, total: number }[], globalTota
         </svg>
       </div>
 
-      <div className="flex-1 w-full space-y-4">
+      <div className="flex-1 w-full space-y-2">
         {data.map((item, i) => (
-          <div key={`legend-${i}`} className="flex items-center justify-between group p-3 rounded-2xl hover:bg-slate-50 transition-all">
-            <div className="flex items-center gap-4">
-              <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: colors[i % colors.length] }}></div>
-              <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px]">
-                {item.name}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-                {Math.round((item.total / displayTotal) * 100)}%
-              </span>
-              <span className="text-[11px] font-black text-blue-600">
-                {item.total}
-              </span>
-            </div>
+          <div key={`legend-${i}`} className="group transition-all">
+            <button 
+              onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+              className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all ${expandedIndex === i ? 'bg-blue-50 shadow-sm' : 'hover:bg-slate-50'}`}
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: colors[i % colors.length] }}></div>
+                <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px] text-left">
+                  {item.name}
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+                  {Math.round((item.total / displayTotal) * 100)}%
+                </span>
+                <span className="text-[11px] font-black text-blue-600 w-8 text-right">
+                  {item.total}
+                </span>
+                <div className={`transition-transform duration-300 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}>
+                  <ICONS.ChevronDown />
+                </div>
+              </div>
+            </button>
+            
+            {/* Dropdown breakdown list */}
+            {expandedIndex === i && (
+              <div className="mt-1 ml-8 px-4 py-3 bg-white border border-blue-50 rounded-2xl animate-fade-in shadow-inner overflow-hidden">
+                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-50 pb-1 flex justify-between">
+                  <span>Sección</span>
+                  <span>Cant. / %</span>
+                </div>
+                <div className="space-y-1.5">
+                  {item.sections.map((sec, j) => (
+                    <div key={`sec-${j}`} className="flex justify-between items-center group/item">
+                      <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">
+                        {sec.name}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                          {sec.quantity}
+                        </span>
+                        <span className="text-[9px] font-bold text-slate-400">
+                          {sec.percent}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -260,6 +309,7 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
       setSuggestions(filtered.slice(0, 10));
       setIsOpen(true);
     } else {
+      setSuggestions([]);
       setIsOpen(false);
     }
   }, [query, products]);
@@ -398,20 +448,37 @@ const App: React.FC = () => {
   useEffect(() => { if (isChatOpen) scrollToBottom(); }, [chatMessages, isChatOpen]);
 
   const deliveryStats = useMemo(() => {
-    const counts: Record<string, number> = {};
+    const productDataMap: Record<string, { total: number, sections: Record<string, number> }> = {};
     let globalTotal = 0;
+    
     deliveryData.forEach(d => {
       const pName = d.producto?.trim();
       if (pName) {
         const qty = (d.cantidad || 0);
-        counts[pName] = (counts[pName] || 0) + qty;
+        if (!productDataMap[pName]) {
+          productDataMap[pName] = { total: 0, sections: {} };
+        }
+        productDataMap[pName].total += qty;
+        productDataMap[pName].sections[d.seccion] = (productDataMap[pName].sections[d.seccion] || 0) + qty;
         globalTotal += qty;
       }
     });
-    const top5 = Object.entries(counts)
-      .sort(([, a], [, b]) => b - a)
+
+    const top5 = Object.entries(productDataMap)
+      .sort(([, a], [, b]) => b.total - a.total)
       .slice(0, 5)
-      .map(([name, total]) => ({ name, total }));
+      .map(([name, data]) => ({ 
+        name, 
+        total: data.total,
+        sections: Object.entries(data.sections)
+          .map(([sec, q]) => ({
+            name: sec || 'N/A',
+            quantity: q,
+            // Calculate percentage relative to the same base as the product percentage (globalTotal)
+            percent: globalTotal > 0 ? Math.round((q / globalTotal) * 100) : 0 
+          }))
+          .sort((a,b) => b.quantity - a.quantity)
+      }));
     
     return { top5, globalTotal };
   }, [deliveryData]);
@@ -688,17 +755,19 @@ const App: React.FC = () => {
       </aside>
 
       <main className={`flex-1 md:ml-64 p-4 md:p-12 max-w-6xl mx-auto w-full`}>
-        <header className="flex justify-between items-center mb-6 md:mb-10">
-          <div className="hidden md:block">
-            <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tighter uppercase leading-none">
-              {activeSection === AppSection.DASHBOARD && 'Vista General'}
-              {activeSection === AppSection.QUERY && 'Consultas de Productos'}
-              {activeSection === AppSection.SOLICITUD && 'Gestión de Solicitudes'}
-              {activeSection === AppSection.ENTREGA && 'Control de Historial'}
-              {activeSection === AppSection.SETTINGS && 'Configuración'}
-            </h2>
+        <header className="flex flex-col mb-6 md:mb-10">
+          <div className="flex justify-between items-center mb-6">
+            <div className="hidden md:block">
+              <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tighter uppercase leading-none">
+                {activeSection === AppSection.DASHBOARD && 'Vista General'}
+                {activeSection === AppSection.QUERY && 'Consultas de Activos'}
+                {activeSection === AppSection.SOLICITUD && 'Gestión de Solicitudes'}
+                {activeSection === AppSection.ENTREGA && 'Control de Historial'}
+                {activeSection === AppSection.SETTINGS && 'Configuración'}
+              </h2>
+            </div>
+            <div className="md:hidden flex items-center gap-3"><CustomLogo /><h1 className="font-black text-sm text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-[10px]">Bodega</span></h1></div>
           </div>
-          <div className="md:hidden flex items-center gap-3"><CustomLogo /><h1 className="font-black text-sm text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-[10px]">Bodega</span></h1></div>
         </header>
 
         {activeSection === AppSection.DASHBOARD && (

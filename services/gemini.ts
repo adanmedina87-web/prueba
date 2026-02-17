@@ -23,10 +23,44 @@ export const getInventoryInsights = async (query: string, inventory: Product[]) 
       },
     });
 
-    // Access the .text property directly, it is not a method.
     return response.text;
   } catch (error) {
     console.error("Gemini API Error:", error);
     return "Lo siento, hubo un error al procesar tu consulta con la IA. Por favor, revisa manualmente los datos.";
+  }
+};
+
+export const getCalendarEvents = async (calendarUrl: string) => {
+  try {
+    const now = new Date();
+    const todayStr = now.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' });
+    const monthStr = now.toLocaleDateString('es-ES', { month: 'long' });
+    const year = now.getFullYear();
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: `Analiza el calendario en formato iCal (.ics) en la URL: ${calendarUrl}. 
+      Hoy es ${todayStr}.
+      
+      Necesito extraer las actividades para:
+      1. El día de hoy (${todayStr}).
+      2. Lo que queda del mes de ${monthStr} del ${year}.
+      
+      Reglas:
+      - Indica las actividades con su fecha respectiva.
+      - Si hay actividades hoy, lístalas indicando "HOY: [Título]".
+      - Si no hay hoy, pero hay en el mes, lístalas indicando su fecha "[Día]: [Título]".
+      - Si no hay actividades hoy NI en lo que resta del mes, responde estrictamente con: 'SIN ACTIVIDADES EN LO QUE RESTA DE MES'.
+      - La respuesta debe ser una lista muy concisa (una sola línea o ítems cortos). Sin introducciones ni conclusiones.`,
+      config: {
+        systemInstruction: "Eres un asistente de información escolar preciso. Extraes eventos de archivos iCal públicos y devuelves una lista simple y corta.",
+        tools: [{googleSearch: {}}]
+      }
+    });
+
+    return response.text?.trim() || "SIN ACTIVIDADES EN LO QUE RESTA DE MES";
+  } catch (error) {
+    console.error("Error fetching calendar:", error);
+    return "SIN ACTIVIDADES EN LO QUE RESTA DE MES";
   }
 };
