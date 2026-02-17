@@ -83,7 +83,6 @@ enum AppSection {
 }
 
 // --- 2. CONSTANTES E ICONOS ---
-// Se actualiza el link predeterminado para el inventario según la nueva URL proporcionada (gid=507872400)
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit#gid=507872400';
 const DELIVERY_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?usp=sharing';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9R2ocvOKfUpf78kVjZxG9EL5tbGxqtvu2Y-YeM7ADGbA41JdHdJ0GRmCJ3Qh8-LY/exec';
@@ -184,7 +183,7 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => query.trim().length > 0 && setIsOpen(true)}
-        placeholder={placeholder || "¿Qué activo buscas?"}
+        placeholder={placeholder || "¿Qué producto buscas?"}
         className="w-full px-4 py-3.5 md:px-5 md:py-3 pl-12 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm text-sm font-bold uppercase tracking-tight"
       />
       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
@@ -243,7 +242,6 @@ const App: React.FC = () => {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [dbStatusError, setDbStatusError] = useState<string | null>(null);
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
@@ -272,10 +270,8 @@ const App: React.FC = () => {
       } else {
         setCurrentOrderItems([]);
       }
-      setDbStatusError(null);
     }, (error) => {
       console.error("Realtime Database error:", error);
-      setDbStatusError("Error de conexión con la base de datos en tiempo real.");
     });
 
     // Escuchar solicitudes finalizadas pendientes por cerrar
@@ -310,7 +306,6 @@ const App: React.FC = () => {
       let url = link;
       if (url.includes('/edit')) {
         const baseUrl = url.split('/edit')[0];
-        // Extraer gid de la URL original (parámetro query o fragmento hash)
         const gidMatch = url.match(/[?#&]gid=([0-9]+)/);
         const gid = gidMatch ? gidMatch[1] : '';
         url = `${baseUrl}/export?format=csv${gid ? `&gid=${gid}` : ''}`;
@@ -446,7 +441,6 @@ const App: React.FC = () => {
 
     const personDeliveries = deliveryData.filter(d => d.persona.trim().toLowerCase() === personName);
     if (personDeliveries.length === 0) {
-      alert("No se encontraron pedidos anteriores para esta persona.");
       return;
     }
 
@@ -493,7 +487,6 @@ const App: React.FC = () => {
       }
     } catch (err) {
       console.error("Add item error:", err);
-      alert("Error al sincronizar con la base de datos.");
     }
   };
 
@@ -518,7 +511,6 @@ const App: React.FC = () => {
   const finalizarPedido = async () => {
     const { persona, departamento, seccion } = solicitudFilters;
     if (!persona.trim() || !departamento.trim() || !seccion.trim()) {
-      alert("Por favor completa los campos de Persona, Departamento y Sección antes de finalizar.");
       return;
     }
 
@@ -526,7 +518,6 @@ const App: React.FC = () => {
     const userItems = currentOrderItems.filter(i => i.persona === persona);
 
     if (userItems.length === 0) {
-      alert("No tienes productos en tu lista temporal. Añade productos usando el buscador.");
       return;
     }
 
@@ -555,10 +546,8 @@ const App: React.FC = () => {
       // 3. Resetear estados locales
       setSolicitudFilters({ persona: '', departamento: '', seccion: '' });
       setSolicitudStep('cerrar');
-      alert("Pedido finalizado y guardado en la nube. Pendiente de cierre.");
     } catch (err) {
       console.error("Error al finalizar:", err);
-      alert("Error al guardar el pedido en la nube.");
     }
   };
 
@@ -585,10 +574,8 @@ const App: React.FC = () => {
       const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`);
       await remove(reqRef);
 
-      alert("Pedido cerrado y enviado a la hoja de cálculo.");
     } catch (e) {
       console.error("Error procesando acción OK:", e);
-      alert("Error de red al conectar con el servidor.");
     }
   };
 
@@ -626,15 +613,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#f8fafc] pb-24 md:pb-0 font-['Plus_Jakarta_Sans']">
       
-      {/* Alerta de Error de Base de Datos */}
-      {dbStatusError && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-rose-600 text-white p-4 text-center text-xs font-black uppercase tracking-widest animate-fade-in flex items-center justify-center gap-4">
-          <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
-          {dbStatusError}
-          <button onClick={() => window.location.reload()} className="bg-white text-rose-600 px-3 py-1 rounded-md text-[10px]">REINTENTAR</button>
-        </div>
-      )}
-
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col fixed h-full z-20 shadow-sm">
         <div className="p-8 flex items-center gap-4"><CustomLogo /><h1 className="font-black text-base text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-sm">Bodega</span></h1></div>
         <nav className="flex-1 px-5 space-y-2 mt-2">
@@ -646,12 +624,12 @@ const App: React.FC = () => {
         </nav>
       </aside>
 
-      <main className={`flex-1 md:ml-64 p-4 md:p-12 max-w-6xl mx-auto w-full ${dbStatusError ? 'pt-24' : ''}`}>
+      <main className={`flex-1 md:ml-64 p-4 md:p-12 max-w-6xl mx-auto w-full`}>
         <header className="flex justify-between items-center mb-6 md:mb-10">
           <div className="hidden md:block">
             <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tighter uppercase leading-none">
               {activeSection === AppSection.DASHBOARD && 'Vista General'}
-              {activeSection === AppSection.QUERY && 'Consultas de Activos'}
+              {activeSection === AppSection.QUERY && 'Consultas de Productos'}
               {activeSection === AppSection.SOLICITUD && 'Gestión de Solicitudes'}
               {activeSection === AppSection.ENTREGA && 'Control de Historial'}
               {activeSection === AppSection.SETTINGS && 'Configuración'}
@@ -663,7 +641,7 @@ const App: React.FC = () => {
         {activeSection === AppSection.DASHBOARD && (
           <div className="space-y-6 md:space-y-10 animate-fade-in">
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              <div className="bg-white p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100 flex flex-col justify-between h-32 md:h-40"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Activos</p><h3 className="text-2xl md:text-4xl font-black text-slate-800">{inventory.length}</h3></div>
+              <div className="bg-white p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100 flex flex-col justify-between h-32 md:h-40"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Productos</p><h3 className="text-2xl md:text-4xl font-black text-slate-800">{inventory.length}</h3></div>
               <div className="bg-white p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100 flex flex-col justify-between h-32 md:h-40"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Stock Total</p><h3 className="text-2xl md:text-4xl font-black text-blue-600">{inventory.reduce((acc, curr) => acc + (curr.quantity || 0), 0)}</h3></div>
               <div className="bg-white p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100 flex flex-col justify-between h-32 md:h-40 col-span-2 lg:col-span-1"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Bodegas</p><h3 className="text-2xl md:text-4xl font-black text-slate-800">{new Set(inventory.map(i => i.location)).size}</h3></div>
             </div>
@@ -678,13 +656,13 @@ const App: React.FC = () => {
         {activeSection === AppSection.QUERY && (
           <div className="animate-fade-in space-y-6 md:space-y-10">
             <div className="bg-white p-6 md:p-10 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100">
-               <h3 className="text-sm font-black text-slate-800 mb-6 uppercase tracking-widest text-center">Buscador Maestro</h3>
+               <h3 className="text-sm font-black text-slate-800 mb-6 uppercase tracking-widest text-center">Buscador de Productos</h3>
                <AutocompleteSearch products={inventory} onSelect={setSelectedProduct} />
             </div>
             {selectedProduct && (
               <div className="max-w-3xl mx-auto animate-fade-in">
                 <div className="bg-white rounded-[40px] shadow-2xl border border-slate-100 p-8 md:p-12">
-                   <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-2 rounded-full mb-6 inline-block">Ficha de Activo</span>
+                   <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-2 rounded-full mb-6 inline-block">Ficha de Producto</span>
                    <h4 className="text-2xl md:text-4xl font-black text-slate-800 uppercase leading-none mb-8">{selectedProduct.name}</h4>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
                       <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Ubicación</p><p className="text-lg text-slate-800 font-bold uppercase">{selectedProduct.location}</p></div>
@@ -759,9 +737,9 @@ const App: React.FC = () => {
 
             {solicitudStep === 'crear' && (
               <div className="space-y-4 animate-fade-in">
-                {/* Añadir Activos - Más directo */}
+                {/* Añadir Productos - Más directo */}
                 <div className="bg-white p-4 md:p-6 rounded-[24px] border border-slate-100 shadow-sm">
-                  <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-widest">Añadir Activos</h4>
+                  <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-widest">Añadir Productos</h4>
                   <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe para añadir rápido..." />
                 </div>
 
