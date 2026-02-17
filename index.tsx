@@ -38,6 +38,7 @@ interface Product {
   responsible: string;
   sku: string;
   link: string; 
+  imageUrl?: string; 
 }
 
 interface DeliveryRecord {
@@ -116,7 +117,7 @@ const parseCSV = (text: string) => {
 };
 
 const getNormalizedTimestamp = (dateStr: string) => {
-  if (!dateStr) return null;
+  if (!dateStr) return 0;
   const cleanStr = dateStr.trim();
   const separator = cleanStr.includes('/') ? '/' : (cleanStr.includes('-') ? '-' : null);
   let y = 0, m = 0, d = 1;
@@ -129,23 +130,125 @@ const getNormalizedTimestamp = (dateStr: string) => {
     else {
       const fallback = new Date(cleanStr);
       if (!isNaN(fallback.getTime())) { fallback.setHours(0, 0, 0, 0); return fallback.getTime(); }
-      return null;
+      return 0;
     }
   } else {
     if (cleanStr.length === 4 && !isNaN(parseInt(cleanStr))) { y = parseInt(cleanStr); m = 0; d = 1; }
     else {
       const fallback = new Date(cleanStr);
       if (!isNaN(fallback.getTime())) { fallback.setHours(0, 0, 0, 0); return fallback.getTime(); }
-      return null;
+      return 0;
     }
   }
   const dateObj = new Date(y, m, d);
-  if (isNaN(dateObj.getTime())) return null;
+  if (isNaN(dateObj.getTime())) return 0;
   dateObj.setHours(0, 0, 0, 0);
   return dateObj.getTime();
 };
 
-// --- 4. COMPONENTE BUSCADOR ---
+/**
+ * Formatea URL de Google Drive para visualización directa.
+ */
+const formatImageUrl = (url: string) => {
+  if (!url) return '';
+  if (url.includes('drive.google.com')) {
+    const idMatch = url.match(/\/d\/([^/]+)/) || url.match(/id=([^&]+)/);
+    if (idMatch && idMatch[1]) {
+      return `https://lh3.googleusercontent.com/u/0/d/${idMatch[1]}=w1000`;
+    }
+  }
+  return url;
+};
+
+// --- 4. COMPONENTES VISUALES ---
+
+/**
+ * Gráfico de Torta en 3D Profesional
+ */
+const PieChart3D: React.FC<{ data: { name: string, total: number }[] }> = ({ data }) => {
+  const totalSum = data.reduce((sum, item) => sum + item.total, 0);
+  const colors = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
+  const radiusX = 140;
+  const radiusY = 75;
+  const depth = 22;
+  const centerX = 160;
+  const centerY = 110;
+
+  let currentAngle = 0;
+
+  if (totalSum === 0) return null;
+
+  return (
+    <div className="flex flex-col lg:flex-row items-center justify-between gap-10 animate-fade-in">
+      <div className="relative w-full max-w-[320px] lg:max-w-[420px]">
+        <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_25px_rgba(0,0,0,0.15)]">
+          {data.map((item, i) => {
+            const sliceAngle = (item.total / totalSum) * 2 * Math.PI;
+            const startAngle = currentAngle;
+            const endAngle = currentAngle + sliceAngle;
+            currentAngle = endAngle;
+
+            const x1 = centerX + radiusX * Math.cos(startAngle);
+            const y1 = centerY + radiusY * Math.sin(startAngle);
+            const x2 = centerX + radiusX * Math.cos(endAngle);
+            const y2 = centerY + radiusY * Math.sin(endAngle);
+
+            const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+
+            return (
+              <g key={`slice-group-${i}`}>
+                <path
+                  d={`
+                    M ${x1} ${y1} 
+                    L ${x1} ${y1 + depth} 
+                    A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2 + depth}
+                    L ${x2} ${y2}
+                    A ${radiusX} ${radiusY} 0 ${largeArcFlag} 0 ${x1} ${y1}
+                  `}
+                  fill={colors[i % colors.length]}
+                  filter="brightness(0.7)"
+                />
+                <path
+                  d={`
+                    M ${centerX} ${centerY} 
+                    L ${x1} ${y1} 
+                    A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2} 
+                    Z
+                  `}
+                  fill={colors[i % colors.length]}
+                  stroke="rgba(255,255,255,0.1)"
+                  strokeWidth="1"
+                />
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+
+      <div className="flex-1 w-full space-y-4">
+        {data.map((item, i) => (
+          <div key={`legend-${i}`} className="flex items-center justify-between group p-3 rounded-2xl hover:bg-slate-50 transition-all">
+            <div className="flex items-center gap-4">
+              <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: colors[i % colors.length] }}></div>
+              <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px]">
+                {item.name}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+                {Math.round((item.total / totalSum) * 100)}%
+              </span>
+              <span className="text-[11px] font-black text-blue-600">
+                {item.total}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
 const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product) => void, placeholder?: string }> = ({ products, onSelect, placeholder }) => {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<Product[]>([]);
@@ -188,14 +291,24 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
       />
       <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
       {isOpen && suggestions.length > 0 && (
-        <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-50 max-h-[250px] overflow-y-auto">
+        <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
           {suggestions.map((p) => (
             <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors active:bg-blue-100">
-              <div className="flex-1 pr-3">
-                <p className="font-bold text-slate-800 text-sm uppercase tracking-tight">{p.name}</p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{p.location}</p>
+              <div className="flex items-center gap-3 flex-1 pr-3 truncate">
+                {p.imageUrl && (
+                  <img 
+                    src={formatImageUrl(p.imageUrl)} 
+                    alt={p.name} 
+                    className="w-10 h-10 object-cover rounded-lg bg-slate-100 shadow-sm shrink-0"
+                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                  />
+                )}
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate">{p.name}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{p.location}</p>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-md shrink-0">STOCK: {p.quantity}</span>
                 <div className="bg-blue-600 text-white p-1.5 rounded-lg shadow-sm"><ICONS.Plus /></div>
               </div>
@@ -211,14 +324,12 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
 const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.DASHBOARD);
   
-  // Inventario
   const [inventory, setInventory] = useState<Product[]>(() => {
     const saved = localStorage.getItem('inv_v4_final');
     return saved ? JSON.parse(saved) : [];
   });
   const [sourceLink, setSourceLink] = useState(() => localStorage.getItem('inv_link_v4_final') || DEFAULT_SHEET_URL);
   
-  // Entrega
   const [deliveryData, setDeliveryData] = useState<DeliveryRecord[]>(() => {
     const saved = localStorage.getItem('del_v4_final');
     return saved ? JSON.parse(saved) : [];
@@ -227,7 +338,6 @@ const App: React.FC = () => {
     persona: '', seccion: '', departamento: '', fechaInicio: '', fechaFin: ''
   });
 
-  // Solicitud (Sincronización Realtime Database)
   const [solicitudStep, setSolicitudStep] = useState<'crear' | 'cerrar'>('crear');
   const [solicitudFilters, setSolicitudFilters] = useState(() => {
     const saved = localStorage.getItem('solicitud_filters_v12');
@@ -245,15 +355,12 @@ const App: React.FC = () => {
 
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Persistencia Local
   useEffect(() => { localStorage.setItem('inv_v4_final', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { localStorage.setItem('inv_link_v4_final', sourceLink); }, [sourceLink]);
   useEffect(() => { localStorage.setItem('del_v4_final', JSON.stringify(deliveryData)); }, [deliveryData]);
   useEffect(() => { localStorage.setItem('solicitud_filters_v12', JSON.stringify(solicitudFilters)); }, [solicitudFilters]);
 
-  // --- Sincronización Realtime Database ---
   useEffect(() => {
-    // Escuchar pedidos temporales
     const itemsRef = ref(db, "pedidos_temporales");
     const unsubscribeItems = onValue(itemsRef, (snapshot) => {
       const data = snapshot.val();
@@ -270,11 +377,8 @@ const App: React.FC = () => {
       } else {
         setCurrentOrderItems([]);
       }
-    }, (error) => {
-      console.error("Realtime Database error:", error);
     });
 
-    // Escuchar solicitudes finalizadas pendientes por cerrar
     const finalizedRef = ref(db, "solicitudes_finalizadas");
     const unsubscribeFinalized = onValue(finalizedRef, (snapshot) => {
       const data = snapshot.val();
@@ -297,6 +401,20 @@ const App: React.FC = () => {
 
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { if (isChatOpen) scrollToBottom(); }, [chatMessages, isChatOpen]);
+
+  const topProducts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    deliveryData.forEach(d => {
+      const pName = d.producto?.trim();
+      if (pName) {
+        counts[pName] = (counts[pName] || 0) + (d.cantidad || 0);
+      }
+    });
+    return Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5)
+      .map(([name, total]) => ({ name, total }));
+  }, [deliveryData]);
 
   const syncData = async (type: 'inventory' | 'delivery' = 'inventory', silent = false) => {
     const link = type === 'inventory' ? sourceLink : DELIVERY_SHEET_URL;
@@ -328,6 +446,7 @@ const App: React.FC = () => {
           location: cols[2] || 'No especificado',
           responsible: cols[3] || 'Sin asignar',
           link: cols[4] || '', 
+          imageUrl: cols[5] || '', 
           category: 'General',
           arrivalDate: new Date().toISOString()
         }));
@@ -387,27 +506,29 @@ const App: React.FC = () => {
     return Array.from(set).filter(Boolean).sort();
   }, [deliveryData]);
 
-  const uniqueSeccionesHistory = useMemo(() => Array.from(new Set(deliveryData.map(d => d.seccion).filter(s => s))).sort(), [deliveryData]);
-  const uniqueDepartamentosHistory = useMemo(() => Array.from(new Set(deliveryData.map(d => d.departamento).filter(d => d))).sort(), [deliveryData]);
+  const uniqueSeccionesHistory = allPossibleSecciones;
+  const uniqueDepartamentosHistory = allPossibleDeptos;
 
   const filteredDelivery = useMemo(() => {
-    const filterStartTime = getNormalizedTimestamp(deliveryFilters.fechaInicio);
-    const filterEndTime = getNormalizedTimestamp(deliveryFilters.fechaFin);
-    return deliveryData.filter(d => {
-      const matchPersona = deliveryFilters.persona === '' || d.persona.toLowerCase().includes(deliveryFilters.persona.toLowerCase());
-      const matchSeccion = deliveryFilters.seccion === '' || d.seccion.toLowerCase() === deliveryFilters.seccion.toLowerCase();
-      const matchDepto = deliveryFilters.departamento === '' || d.departamento.toLowerCase() === deliveryFilters.departamento.toLowerCase();
-      let matchFecha = true;
-      const recordTime = getNormalizedTimestamp(d.fecha);
-      if (recordTime !== null) {
-        if (filterStartTime !== null && recordTime < filterStartTime) matchFecha = false;
-        if (filterEndTime !== null && recordTime > filterEndTime) matchFecha = false;
-      } else if (filterStartTime !== null || filterEndTime !== null) matchFecha = false;
-      return matchPersona && matchSeccion && matchDepto && matchFecha;
-    }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
-  }, [deliveryData, deliveryFilters]);
+    return deliveryData
+      .filter(d => {
+        const matchPersona = !deliveryFilters.persona || (d.persona && d.persona.toLowerCase().includes(deliveryFilters.persona.toLowerCase()));
+        const matchSeccion = !deliveryFilters.seccion || d.seccion === deliveryFilters.seccion;
+        const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento;
+        
+        const itemDate = getNormalizedTimestamp(d.fecha);
+        if (!itemDate) return matchPersona && matchSeccion && matchDepto;
 
-  // --- Operaciones CRUD con Realtime Database ---
+        const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio).getTime() : null;
+        const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin).getTime() : null;
+
+        const matchStart = !start || itemDate >= start;
+        const matchEnd = !end || itemDate <= end;
+
+        return matchPersona && matchSeccion && matchDepto && matchStart && matchEnd;
+      })
+      .sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
+  }, [deliveryData, deliveryFilters]);
 
   const handleSolicitantePersonaChange = (val: string) => {
     const trimmedVal = val.trim();
@@ -438,18 +559,12 @@ const App: React.FC = () => {
   const loadPreviousOrder = async () => {
     const personName = solicitudFilters.persona.trim().toLowerCase();
     if (!personName) return;
-
     const personDeliveries = deliveryData.filter(d => d.persona.trim().toLowerCase() === personName);
-    if (personDeliveries.length === 0) {
-      return;
-    }
-
+    if (personDeliveries.length === 0) return;
     const sorted = [...personDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
     const latestDate = sorted[0].fecha;
     const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate);
-
     await clearTemporaryOrders();
-
     const itemsRef = ref(db, "pedidos_temporales");
     const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, {
       producto: item.producto,
@@ -464,26 +579,16 @@ const App: React.FC = () => {
   const addItemToOrder = async (p: Product) => {
     const { persona, departamento, seccion } = solicitudFilters;
     try {
-      // Intentar encontrar si ya existe para este solicitante
       const existing = currentOrderItems.find(item => 
         item.producto === p.name && 
         item.persona === persona
       );
-
       if (existing && existing.id) {
         const itemRef = ref(db, `pedidos_temporales/${existing.id}`);
-        await update(itemRef, {
-          cantidad: existing.cantidad + 1
-        });
+        await update(itemRef, { cantidad: existing.cantidad + 1 });
       } else {
         const itemsRef = ref(db, "pedidos_temporales");
-        await push(itemsRef, {
-          producto: p.name,
-          cantidad: 1,
-          persona,
-          departamento,
-          seccion
-        });
+        await push(itemsRef, { producto: p.name, cantidad: 1, persona, departamento, seccion });
       }
     } catch (err) {
       console.error("Add item error:", err);
@@ -496,13 +601,8 @@ const App: React.FC = () => {
       if (!item || !item.id) return;
       const newVal = item.cantidad + delta;
       const itemRef = ref(db, `pedidos_temporales/${item.id}`);
-      if (newVal <= 0) {
-        await remove(itemRef);
-      } else {
-        await update(itemRef, {
-          cantidad: newVal
-        });
-      }
+      if (newVal <= 0) { await remove(itemRef); }
+      else { await update(itemRef, { cantidad: newVal }); }
     } catch (err) {
       console.error("Update item error:", err);
     }
@@ -510,19 +610,10 @@ const App: React.FC = () => {
 
   const finalizarPedido = async () => {
     const { persona, departamento, seccion } = solicitudFilters;
-    if (!persona.trim() || !departamento.trim() || !seccion.trim()) {
-      return;
-    }
-
-    // Filtrar los ítems que pertenecen a esta persona específica
+    if (!persona.trim() || !departamento.trim() || !seccion.trim()) return;
     const userItems = currentOrderItems.filter(i => i.persona === persona);
-
-    if (userItems.length === 0) {
-      return;
-    }
-
+    if (userItems.length === 0) return;
     const fechaActual = new Date().toLocaleDateString('es-ES');
-    
     const newRequestData = {
       persona: persona.trim(),
       departamento: departamento.trim(),
@@ -530,20 +621,12 @@ const App: React.FC = () => {
       fecha: fechaActual,
       items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad }))
     };
-
     try {
-      // 1. Guardar en Firebase para que todos puedan ver el pedido pendiente de cierre
       const finalizedRef = ref(db, "solicitudes_finalizadas");
       await push(finalizedRef, newRequestData);
-
-      // 2. Limpiar los items temporales de esta persona de la nube
       for (const item of userItems) {
-        if (item.id) {
-          await remove(ref(db, `pedidos_temporales/${item.id}`));
-        }
+        if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); }
       }
-
-      // 3. Resetear estados locales
       setSolicitudFilters({ persona: '', departamento: '', seccion: '' });
       setSolicitudStep('cerrar');
     } catch (err) {
@@ -553,27 +636,10 @@ const App: React.FC = () => {
 
   const handleConfirmOk = async (req: FinalizedRequest) => {
     try {
-      const dataToSend = {
-        persona: req.persona,
-        departamento: req.departamento,
-        seccion: req.seccion,
-        items: req.items
-      };
-      
-      // 1. Enviar al Webhook de App Script
-      await fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(dataToSend)
-      });
-      
-      // 2. Eliminar de Firebase ya que se procesó (se asume enviado con éxito)
+      const dataToSend = { persona: req.persona, departamento: req.departamento, seccion: req.seccion, items: req.items };
+      await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) });
       const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`);
       await remove(reqRef);
-
     } catch (e) {
       console.error("Error procesando acción OK:", e);
     }
@@ -612,7 +678,6 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#f8fafc] pb-24 md:pb-0 font-['Plus_Jakarta_Sans']">
-      
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col fixed h-full z-20 shadow-sm">
         <div className="p-8 flex items-center gap-4"><CustomLogo /><h1 className="font-black text-base text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-sm">Bodega</span></h1></div>
         <nav className="flex-1 px-5 space-y-2 mt-2">
@@ -640,10 +705,14 @@ const App: React.FC = () => {
 
         {activeSection === AppSection.DASHBOARD && (
           <div className="space-y-6 md:space-y-10 animate-fade-in">
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">
-              <div className="bg-white p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100 flex flex-col justify-between h-32 md:h-40"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Productos</p><h3 className="text-2xl md:text-4xl font-black text-slate-800">{inventory.length}</h3></div>
-              <div className="bg-white p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100 flex flex-col justify-between h-32 md:h-40"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Stock Total</p><h3 className="text-2xl md:text-4xl font-black text-blue-600">{inventory.reduce((acc, curr) => acc + (curr.quantity || 0), 0)}</h3></div>
-              <div className="bg-white p-5 md:p-8 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100 flex flex-col justify-between h-32 md:h-40 col-span-2 lg:col-span-1"><p className="text-slate-400 text-[9px] md:text-[10px] font-black uppercase tracking-widest mb-1">Bodegas</p><h3 className="text-2xl md:text-4xl font-black text-slate-800">{new Set(inventory.map(i => i.location)).size}</h3></div>
+            <div className="bg-white p-6 md:p-12 rounded-[40px] shadow-sm border border-slate-100">
+               <h3 className="text-xs font-black text-slate-800 mb-10 uppercase tracking-widest flex items-center gap-3">
+                 <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
+                 Top 5 Productos Solicitados
+               </h3>
+               {topProducts.length > 0 ? ( <PieChart3D data={topProducts} /> ) : (
+                 <div className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">No hay datos aún.</div>
+               )}
             </div>
             {!isChatOpen ? (
               <button onClick={() => setIsChatOpen(true)} className="w-full bg-blue-600 p-8 md:p-10 rounded-[32px] md:rounded-[40px] shadow-2xl text-white flex items-center justify-between group hover:bg-blue-700 transition-all active:translate-y-1"><div className="text-left"><h4 className="text-lg md:text-2xl font-black uppercase tracking-tighter leading-none mb-2 md:mb-3">Asistente Logístico IA</h4><p className="text-blue-100 text-[11px] md:text-[13px] opacity-90 uppercase tracking-widest font-bold">Resuelve dudas sobre stock.</p></div><div className="bg-white/20 p-4 md:p-5 rounded-2xl group-hover:scale-110 transition-transform"><ICONS.Search /></div></button>
@@ -662,6 +731,16 @@ const App: React.FC = () => {
             {selectedProduct && (
               <div className="max-w-3xl mx-auto animate-fade-in">
                 <div className="bg-white rounded-[40px] shadow-2xl border border-slate-100 p-8 md:p-12">
+                   {selectedProduct.imageUrl && (
+                     <div className="w-full mb-8 flex justify-center">
+                       <img 
+                        src={formatImageUrl(selectedProduct.imageUrl)} 
+                        alt={selectedProduct.name} 
+                        className="max-h-64 md:max-h-80 w-auto rounded-3xl shadow-lg border border-slate-100 object-contain"
+                        onError={(e) => (e.currentTarget.style.display = 'none')}
+                       />
+                     </div>
+                   )}
                    <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-2 rounded-full mb-6 inline-block">Ficha de Producto</span>
                    <h4 className="text-2xl md:text-4xl font-black text-slate-800 uppercase leading-none mb-8">{selectedProduct.name}</h4>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
@@ -680,7 +759,6 @@ const App: React.FC = () => {
 
         {activeSection === AppSection.SOLICITUD && (
           <div className="animate-fade-in space-y-4">
-            {/* Información del Solicitante - Más compacta */}
             <div className="bg-white p-4 md:p-6 rounded-[24px] shadow-sm border border-slate-100">
                <div className="flex justify-between items-center mb-4">
                  <h3 className="font-black text-slate-800 text-[10px] md:text-xs uppercase tracking-widest">Solicitante</h3>
@@ -689,47 +767,27 @@ const App: React.FC = () => {
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Persona</label>
-                    <input 
-                      type="text" 
-                      list="personas-list-smart" 
-                      value={solicitudFilters.persona} 
-                      onChange={(e) => handleSolicitantePersonaChange(e.target.value)} 
-                      placeholder="Nombre..." 
-                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" 
-                    />
-                    <datalist id="personas-list-smart">
-                      {allPossiblePersonas.map(p => <option key={p} value={p} />)}
-                    </datalist>
+                    <input type="text" list="personas-list-smart" value={solicitudFilters.persona} onChange={(e) => handleSolicitantePersonaChange(e.target.value)} placeholder="Nombre..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
+                    <datalist id="personas-list-smart">{allPossiblePersonas.map(p => <option key={p} value={p} />)}</datalist>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Departamento</label>
                     <input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="Depto..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
-                    <datalist id="deptos-list-smart">
-                      {allPossibleDeptos.map(d => <option key={d} value={d} />)}
-                    </datalist>
+                    <datalist id="deptos-list-smart">{allPossibleDeptos.map(d => <option key={d} value={d} />)}</datalist>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sección</label>
                     <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => setSolicitudFilters({...solicitudFilters, seccion: e.target.value})} placeholder="Sección..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
-                    <datalist id="secciones-list-smart">
-                      {allPossibleSecciones.map(s => <option key={s} value={s} />)}
-                    </datalist>
+                    <datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
                   </div>
                </div>
-
                {solicitudFilters.persona.trim() !== '' && (
                  <div className="mt-3">
-                   <button 
-                     onClick={loadPreviousOrder}
-                     className="bg-blue-50 text-blue-600 font-black px-4 py-2 rounded-lg text-[8px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"
-                   >
-                     <ICONS.Delivery /> PEDIDO ANTERIOR
-                   </button>
+                   <button onClick={loadPreviousOrder} className="bg-blue-50 text-blue-600 font-black px-4 py-2 rounded-lg text-[8px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"><ICONS.Delivery /> PEDIDO ANTERIOR</button>
                  </div>
                )}
             </div>
 
-            {/* Tabs - Más pequeñas */}
             <div className="flex gap-2">
               <button onClick={() => setSolicitudStep('crear')} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-[0.15em] transition-all ${solicitudStep === 'crear' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Crear Pedido</button>
               <button onClick={() => setSolicitudStep('cerrar')} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-[0.15em] transition-all relative ${solicitudStep === 'cerrar' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Cerrar Pedido {finalizedRequests.length > 0 && <span className="ml-1 bg-rose-500 text-white px-1.5 rounded-full text-[8px]">{finalizedRequests.length}</span>}</button>
@@ -737,41 +795,26 @@ const App: React.FC = () => {
 
             {solicitudStep === 'crear' && (
               <div className="space-y-4 animate-fade-in">
-                {/* Añadir Productos - Más directo */}
                 <div className="bg-white p-4 md:p-6 rounded-[24px] border border-slate-100 shadow-sm">
                   <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-widest">Añadir Productos</h4>
                   <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe para añadir rápido..." />
                 </div>
-
                 {currentOrderItems.filter(i => i.persona === solicitudFilters.persona).length > 0 && (
                   <div className="bg-white rounded-[24px] border shadow-sm overflow-hidden animate-fade-in">
-                    <div className="p-4 bg-slate-50 border-b flex justify-between items-center">
-                      <h4 className="font-black text-slate-800 text-[9px] uppercase tracking-widest">Lista Temporal</h4>
-                      <button onClick={clearTemporaryOrders} className="text-rose-500 font-bold text-[8px] uppercase">LIMPIAR LISTA</button>
-                    </div>
+                    <div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h4 className="font-black text-slate-800 text-[9px] uppercase tracking-widest">Lista Temporal</h4><button onClick={clearTemporaryOrders} className="text-rose-500 font-bold text-[8px] uppercase">LIMPIAR LISTA</button></div>
                     <div className="divide-y divide-slate-50">
                       {currentOrderItems.filter(i => i.persona === solicitudFilters.persona).map((item, i) => (
                         <div key={item.id || i} className="p-3 md:p-4 flex justify-between items-center">
+                          <div className="flex items-center gap-3"><span className="font-bold text-slate-800 text-xs uppercase">{item.producto}</span></div>
                           <div className="flex items-center gap-3">
-                            <span className="font-bold text-slate-800 text-xs uppercase">{item.producto}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                             <button onClick={() => {
-                               const actualIdx = currentOrderItems.indexOf(item);
-                               updateItemQuantity(actualIdx, -1);
-                             }} className="bg-slate-100 p-1.5 rounded-lg hover:bg-rose-100 transition-colors scale-90"><ICONS.Minus /></button>
+                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), -1)} className="bg-slate-100 p-1.5 rounded-lg hover:bg-rose-100 transition-colors scale-90"><ICONS.Minus /></button>
                              <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-black text-xs w-10 text-center">{item.cantidad}</span>
-                             <button onClick={() => {
-                               const actualIdx = currentOrderItems.indexOf(item);
-                               updateItemQuantity(actualIdx, 1);
-                             }} className="bg-slate-100 p-1.5 rounded-lg hover:bg-blue-100 transition-colors scale-90"><ICONS.Plus /></button>
+                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), 1)} className="bg-slate-100 p-1.5 rounded-lg hover:bg-blue-100 transition-colors scale-90"><ICONS.Plus /></button>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <div className="p-4 bg-slate-50 border-t">
-                      <button onClick={finalizarPedido} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl text-[9px] uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">FINALIZAR PEDIDO</button>
-                    </div>
+                    <div className="p-4 bg-slate-50 border-t"><button onClick={finalizarPedido} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl text-[9px] uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">FINALIZAR PEDIDO</button></div>
                   </div>
                 )}
               </div>
@@ -780,27 +823,14 @@ const App: React.FC = () => {
             {solicitudStep === 'cerrar' && (
               <div className="space-y-4 animate-fade-in">
                 {finalizedRequests.length === 0 ? (
-                  <div className="bg-white p-10 rounded-[24px] border text-center flex flex-col items-center">
-                    <div className="bg-slate-50 p-4 rounded-full mb-4"><ICONS.Solicitud /></div>
-                    <p className="font-black text-slate-300 text-[8px] uppercase tracking-widest">No hay pedidos pendientes</p>
-                  </div>
+                  <div className="bg-white p-10 rounded-[24px] border text-center flex flex-col items-center"><div className="bg-slate-50 p-4 rounded-full mb-4"><ICONS.Solicitud /></div><p className="font-black text-slate-300 text-[8px] uppercase tracking-widest">No hay pedidos pendientes</p></div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {finalizedRequests.map((req) => (
                       <div key={req.id} className="bg-white rounded-[24px] border shadow-md overflow-hidden flex flex-col animate-fade-in">
-                        <div className="p-4 bg-blue-50 border-b">
-                          <div className="flex justify-between items-center mb-2"><span className="bg-white px-2 py-0.5 rounded-full font-black text-[7px] text-blue-600 uppercase tracking-widest">#{req.id.split('-').pop()}</span><span className="text-[8px] font-bold text-slate-400">{req.fecha}</span></div>
-                          <h4 className="font-black text-slate-800 text-sm uppercase leading-none tracking-tight">{req.persona}</h4>
-                          <p className="text-[7px] font-bold text-blue-600 uppercase tracking-widest mt-1 truncate">{req.departamento} | {req.seccion}</p>
-                        </div>
-                        <div className="p-4 flex-1 space-y-2">
-                          {req.items.map((item, idx) => (
-                            <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-dashed pb-1"><span className="text-slate-800 uppercase truncate pr-2">{item.producto}</span><span className="text-blue-600 font-black">x{item.cantidad}</span></div>
-                          ))}
-                        </div>
-                        <div className="p-4 bg-slate-50">
-                          <button onClick={() => handleConfirmOk(req)} className="w-full bg-blue-600 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-blue-800 active:scale-95 transition-all">OK</button>
-                        </div>
+                        <div className="p-4 bg-blue-50 border-b"><div className="flex justify-between items-center mb-2"><span className="bg-white px-2 py-0.5 rounded-full font-black text-[7px] text-blue-600 uppercase tracking-widest">#{req.id.split('-').pop()}</span><span className="text-[8px] font-bold text-slate-400">{req.fecha}</span></div><h4 className="font-black text-slate-800 text-sm uppercase leading-none tracking-tight">{req.persona}</h4><p className="text-[7px] font-bold text-blue-600 uppercase tracking-widest mt-1 truncate">{req.departamento} | {req.seccion}</p></div>
+                        <div className="p-4 flex-1 space-y-2">{req.items.map((item, idx) => ( <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-dashed pb-1"><span className="text-slate-800 uppercase truncate pr-2">{item.producto}</span><span className="text-blue-600 font-black">x{item.cantidad}</span></div> ))}</div>
+                        <div className="p-4 bg-slate-50"><button onClick={() => handleConfirmOk(req)} className="w-full bg-blue-600 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-blue-800 active:scale-95 transition-all">OK</button></div>
                       </div>
                     ))}
                   </div>
@@ -815,13 +845,7 @@ const App: React.FC = () => {
             <div className="bg-white p-5 md:p-10 rounded-[32px] shadow-sm border border-slate-100">
                <div className="flex justify-between items-center mb-8"><h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-widest">Búsqueda en Historial</h3><button onClick={() => syncData('delivery')} disabled={isSyncing} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg">{isSyncing ? '...' : 'Actualizar'}</button></div>
                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Persona</label>
-                    <input type="text" list="personas-entrega-list" value={deliveryFilters.persona} onChange={(e) => setDeliveryFilters({...deliveryFilters, persona: e.target.value})} placeholder="Buscar..." className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500" />
-                    <datalist id="personas-entrega-list">
-                      {allPossiblePersonas.map(p => <option key={p} value={p} />)}
-                    </datalist>
-                  </div>
+                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Persona</label><input type="text" list="personas-entrega-list" value={deliveryFilters.persona} onChange={(e) => setDeliveryFilters({...deliveryFilters, persona: e.target.value})} placeholder="Buscar..." className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500" /><datalist id="personas-entrega-list">{allPossiblePersonas.map(p => <option key={p} value={p} />)}</datalist></div>
                   <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sección</label><select value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase appearance-none"><option value="">TODAS</option>{uniqueSeccionesHistory.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                   <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Depto</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase appearance-none"><option value="">TODOS</option>{uniqueDepartamentosHistory.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
                   <div className="grid grid-cols-2 gap-4 md:col-span-2"><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Desde</label><input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs font-bold" /></div><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hasta</label><input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs font-bold" /></div></div>
@@ -836,32 +860,13 @@ const App: React.FC = () => {
         )}
 
         {activeSection === AppSection.SETTINGS && (
-          <div className="max-w-2xl bg-white p-10 rounded-[32px] shadow-sm border border-slate-100 animate-fade-in">
-            <h3 className="text-xl font-bold text-slate-800 mb-8 uppercase tracking-widest">Estado del Origen de Datos</h3>
-            <div className="space-y-6">
-              <div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 text-center">
-                <span className="text-blue-600 font-black text-2xl uppercase tracking-widest">Actualizado</span>
-              </div>
-              <button 
-                onClick={() => { syncData('inventory'); syncData('delivery'); }} 
-                disabled={isSyncing} 
-                className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-blue-700 transition-all disabled:opacity-50 text-[10px] uppercase tracking-widest"
-              >
-                {isSyncing ? 'Conectando...' : 'Recargar Datos del Servidor'}
-              </button>
-            </div>
-          </div>
+          <div className="max-w-2xl bg-white p-10 rounded-[32px] shadow-sm border border-slate-100 animate-fade-in"><h3 className="text-xl font-bold text-slate-800 mb-8 uppercase tracking-widest">Origen de Datos</h3><div className="space-y-6"><div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 text-center"><span className="text-blue-600 font-black text-2xl uppercase tracking-widest">Actualizado</span></div><button onClick={() => { syncData('inventory'); syncData('delivery'); }} disabled={isSyncing} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-blue-700 transition-all disabled:opacity-50 text-[10px] uppercase tracking-widest">{isSyncing ? 'Conectando...' : 'Recargar Datos'}</button></div></div>
         )}
       </main>
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-50 shadow-2xl">
         {navItems.map((item) => (
-          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
-            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl shadow-inner' : ''}`}>
-              {item.icon}
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
-          </button>
+          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}><div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''}`}>{item.icon}</div><span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span></button>
         ))}
       </nav>
     </div>
