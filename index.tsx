@@ -165,8 +165,9 @@ const formatImageUrl = (url: string) => {
 /**
  * Gráfico de Torta en 3D Profesional
  */
-const PieChart3D: React.FC<{ data: { name: string, total: number }[] }> = ({ data }) => {
-  const totalSum = data.reduce((sum, item) => sum + item.total, 0);
+const PieChart3D: React.FC<{ data: { name: string, total: number }[], globalTotal?: number }> = ({ data, globalTotal }) => {
+  const localSum = data.reduce((sum, item) => sum + item.total, 0);
+  const displayTotal = globalTotal || localSum;
   const colors = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
   const radiusX = 140;
   const radiusY = 75;
@@ -176,14 +177,15 @@ const PieChart3D: React.FC<{ data: { name: string, total: number }[] }> = ({ dat
 
   let currentAngle = 0;
 
-  if (totalSum === 0) return null;
+  if (localSum === 0) return null;
 
   return (
     <div className="flex flex-col lg:flex-row items-center justify-between gap-10 animate-fade-in">
       <div className="relative w-full max-w-[320px] lg:max-w-[420px]">
         <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_25px_rgba(0,0,0,0.15)]">
           {data.map((item, i) => {
-            const sliceAngle = (item.total / totalSum) * 2 * Math.PI;
+            // El tamaño visual de los gajos se mantiene proporcional a los 5 mostrados
+            const sliceAngle = (item.total / localSum) * 2 * Math.PI;
             const startAngle = currentAngle;
             const endAngle = currentAngle + sliceAngle;
             currentAngle = endAngle;
@@ -236,7 +238,8 @@ const PieChart3D: React.FC<{ data: { name: string, total: number }[] }> = ({ dat
             </div>
             <div className="flex items-center gap-3">
               <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-                {Math.round((item.total / totalSum) * 100)}%
+                {/* Porcentaje basado en el total global (todas las entregas) */}
+                {Math.round((item.total / displayTotal) * 100)}%
               </span>
               <span className="text-[11px] font-black text-blue-600">
                 {item.total}
@@ -402,18 +405,24 @@ const App: React.FC = () => {
   const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   useEffect(() => { if (isChatOpen) scrollToBottom(); }, [chatMessages, isChatOpen]);
 
-  const topProducts = useMemo(() => {
+  // Se calcula tanto el top 5 como el total global de todas las entregas para porcentajes reales
+  const deliveryStats = useMemo(() => {
     const counts: Record<string, number> = {};
+    let globalTotal = 0;
     deliveryData.forEach(d => {
       const pName = d.producto?.trim();
       if (pName) {
-        counts[pName] = (counts[pName] || 0) + (d.cantidad || 0);
+        const qty = (d.cantidad || 0);
+        counts[pName] = (counts[pName] || 0) + qty;
+        globalTotal += qty;
       }
     });
-    return Object.entries(counts)
+    const top5 = Object.entries(counts)
       .sort(([, a], [, b]) => b - a)
       .slice(0, 5)
       .map(([name, total]) => ({ name, total }));
+    
+    return { top5, globalTotal };
   }, [deliveryData]);
 
   const syncData = async (type: 'inventory' | 'delivery' = 'inventory', silent = false) => {
@@ -710,7 +719,9 @@ const App: React.FC = () => {
                  <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
                  Top 5 Productos Solicitados
                </h3>
-               {topProducts.length > 0 ? ( <PieChart3D data={topProducts} /> ) : (
+               {deliveryStats.top5.length > 0 ? ( 
+                 <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} /> 
+               ) : (
                  <div className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">No hay datos aún.</div>
                )}
             </div>
