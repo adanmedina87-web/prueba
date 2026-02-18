@@ -44,7 +44,6 @@ interface Product {
 interface DeliveryRecord {
   id: string;
   fecha: string;
-  persona: string;
   seccion: string;
   departamento: string;
   producto: string;
@@ -55,14 +54,12 @@ interface OrderItem {
   id?: string;
   producto: string;
   cantidad: number;
-  persona?: string;
   departamento?: string;
   seccion?: string;
 }
 
 interface FinalizedRequest {
   id: string;
-  persona: string;
   departamento: string;
   seccion: string;
   fecha: string;
@@ -172,7 +169,7 @@ interface ProductStat {
   sections: SectionBreakdown[];
 }
 
-const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ data, globalTotal }) => {
+const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: string }> = ({ data, globalTotal, title }) => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
   
@@ -186,136 +183,168 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ d
   const centerX = 160;
   const centerY = 110;
 
-  let currentAngle = 0;
-
   if (localSum === 0) return null;
 
+  // Pre-calcular los ángulos y datos de cada rebanada para poder ordenarlas por profundidad (eje Y)
+  let angleSum = 0;
+  const slices = data.map((item, i) => {
+    const sliceAngle = (item.total / localSum) * 2 * Math.PI;
+    const startAngle = angleSum;
+    const endAngle = angleSum + sliceAngle;
+    angleSum = endAngle;
+    const midAngle = startAngle + (sliceAngle / 2);
+    return { item, i, startAngle, endAngle, midAngle, sliceAngle };
+  });
+
+  // Ordenar para renderizar primero las de atrás (sin(midAngle) mínimo) y al último las de adelante
+  const sortedSlices = [...slices].sort((a, b) => Math.sin(a.midAngle) - Math.sin(b.midAngle));
+
   return (
-    <div className="flex flex-col lg:flex-row items-start justify-between gap-10 animate-fade-in">
-      {/* Chart container remains stable at top */}
-      <div className="relative w-full max-w-[320px] lg:max-w-[420px] sticky top-0">
-        <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_25px_rgba(0,0,0,0.15)] overflow-visible">
-          {data.map((item, i) => {
-            const sliceAngle = (item.total / localSum) * 2 * Math.PI;
-            const startAngle = currentAngle;
-            const endAngle = currentAngle + sliceAngle;
-            currentAngle = endAngle;
+    <div className="bg-white p-6 md:p-12 rounded-[40px] shadow-sm border border-slate-100 mb-8 overflow-hidden">
+      <h3 className="text-xs font-black text-slate-800 mb-10 uppercase tracking-widest flex items-center gap-3">
+        <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
+        {title || "Estadísticas"}
+      </h3>
+      <div className="flex flex-col lg:flex-row items-start justify-between gap-10 animate-fade-in relative min-h-[350px] lg:min-h-0">
+        <div className="relative w-full max-w-[320px] lg:max-w-[420px] lg:sticky lg:top-0">
+          <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_25px_rgba(0,0,0,0.15)] overflow-visible pointer-events-none">
+            {sortedSlices.map((slice) => {
+              const { item, i, startAngle, endAngle, midAngle, sliceAngle } = slice;
+              const isHighlighted = highlightedIndex === i;
+              
+              // Solo se eleva/desplaza si está resaltado (hover en leyenda)
+              const explodeOffset = isHighlighted ? 45 : 0;
+              const ox = explodeOffset * Math.cos(midAngle);
+              const oy = explodeOffset * Math.sin(midAngle);
 
-            const isHighlighted = highlightedIndex === i;
-            const explodeOffset = isHighlighted ? 20 : 0;
-            const midAngle = startAngle + (sliceAngle / 2);
-            const ox = explodeOffset * Math.cos(midAngle);
-            const oy = explodeOffset * Math.sin(midAngle);
+              const x1 = centerX + radiusX * Math.cos(startAngle);
+              const y1 = centerY + radiusY * Math.sin(startAngle);
+              const x2 = centerX + radiusX * Math.cos(endAngle);
+              const y2 = centerY + radiusY * Math.sin(endAngle);
 
-            const x1 = centerX + radiusX * Math.cos(startAngle);
-            const y1 = centerY + radiusY * Math.sin(startAngle);
-            const x2 = centerX + radiusX * Math.cos(endAngle);
-            const y2 = centerY + radiusY * Math.sin(endAngle);
+              const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
 
-            const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
+              return (
+                <g 
+                  key={`slice-group-${i}`}
+                  style={{ 
+                    transform: `translate(${ox}px, ${oy}px)`, 
+                    transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' 
+                  }}
+                >
+                  <path
+                    d={`
+                      M ${x1} ${y1} 
+                      L ${x1} ${y1 + depth} 
+                      A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2 + depth}
+                      L ${x2} ${y2}
+                      A ${radiusX} ${radiusY} 0 ${largeArcFlag} 0 ${x1} ${y1}
+                    `}
+                    fill={colors[i % colors.length]}
+                    filter="brightness(0.7)"
+                  />
+                  <path
+                    d={`
+                      M ${centerX} ${centerY}
+                      L ${x1} ${y1}
+                      L ${x1} ${y1 + depth}
+                      L ${centerX} ${centerY + depth}
+                      Z
+                    `}
+                    fill={colors[i % colors.length]}
+                    filter="brightness(0.5)"
+                  />
+                  <path
+                    d={`
+                      M ${centerX} ${centerY}
+                      L ${x2} ${y2}
+                      L ${x2} ${y2 + depth}
+                      L ${centerX} ${centerY + depth}
+                      Z
+                    `}
+                    fill={colors[i % colors.length]}
+                    filter="brightness(0.85)"
+                  />
+                  <path
+                    d={`
+                      M ${centerX} ${centerY} 
+                      L ${x1} ${y1} 
+                      A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2} 
+                      Z
+                    `}
+                    fill={colors[i % colors.length]}
+                    stroke="rgba(255,255,255,0.25)"
+                    strokeWidth="1.5"
+                  />
+                </g>
+              );
+            })}
+          </svg>
+        </div>
 
-            return (
-              <g 
-                key={`slice-group-${i}`}
-                style={{ 
-                  transform: `translate(${ox}px, ${oy}px)`, 
-                  transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)' 
-                }}
-              >
-                {/* 3D Sides */}
-                <path
-                  d={`
-                    M ${x1} ${y1} 
-                    L ${x1} ${y1 + depth} 
-                    A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2 + depth}
-                    L ${x2} ${y2}
-                    A ${radiusX} ${radiusY} 0 ${largeArcFlag} 0 ${x1} ${y1}
-                  `}
-                  fill={colors[i % colors.length]}
-                  filter="brightness(0.7)"
-                />
-                {/* Top Slice */}
-                <path
-                  d={`
-                    M ${centerX} ${centerY} 
-                    L ${x1} ${y1} 
-                    A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2} 
-                    Z
-                  `}
-                  fill={colors[i % colors.length]}
-                  stroke="rgba(255,255,255,0.1)"
-                  strokeWidth="1"
-                />
-              </g>
-            );
-          })}
-        </svg>
-      </div>
-
-      <div className="flex-1 w-full space-y-2">
-        {data.map((item, i) => (
-          <div 
-            key={`legend-${i}`} 
-            className="group transition-all"
-            onMouseEnter={() => setHighlightedIndex(i)}
-            onMouseLeave={() => setHighlightedIndex(null)}
-          >
-            <button 
-              onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-              className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all ${expandedIndex === i ? 'bg-blue-50 shadow-sm' : 'hover:bg-slate-50'}`}
+        <div className="flex-1 w-full space-y-2">
+          {data.map((item, i) => (
+            <div 
+              key={`legend-${i}`} 
+              className="group transition-all"
+              onMouseEnter={() => setHighlightedIndex(i)}
+              onMouseLeave={() => setHighlightedIndex(null)}
             >
-              <div className="flex items-center gap-4">
-                <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: colors[i % colors.length] }}></div>
-                <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px] text-left">
-                  {item.name}
-                </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
-                  {Math.round((item.total / displayTotal) * 100)}%
-                </span>
-                <span className="text-[11px] font-black text-blue-600 w-8 text-right">
-                  {item.total}
-                </span>
-                <div className={`transition-transform duration-300 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}>
-                  <ICONS.ChevronDown />
+              <button 
+                onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
+                className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all ${expandedIndex === i ? 'bg-blue-50 shadow-sm' : 'hover:bg-slate-50'}`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: colors[i % colors.length] }}></div>
+                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px] text-left">
+                    {item.name}
+                  </span>
                 </div>
-              </div>
-            </button>
-            
-            {/* Dropdown breakdown list */}
-            {expandedIndex === i && (
-              <div className="mt-1 ml-8 px-4 py-3 bg-white border border-blue-50 rounded-2xl animate-fade-in shadow-inner overflow-hidden">
-                <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-50 pb-1 flex justify-between">
-                  <span>Sección</span>
-                  <span>Cant. / % (Global)</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+                    {Math.round((item.total / displayTotal) * 100)}%
+                  </span>
+                  <span className="text-[11px] font-black text-blue-600 w-8 text-right">
+                    {item.total}
+                  </span>
+                  <div className={`transition-transform duration-300 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}>
+                    <ICONS.ChevronDown />
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  {item.sections.map((sec, j) => (
-                    <div 
-                      key={`sec-${j}`} 
-                      className="flex justify-between items-center group/item hover:bg-slate-50 rounded px-1 transition-colors"
-                      onMouseEnter={() => setHighlightedIndex(i)}
-                      onMouseLeave={() => setHighlightedIndex(null)}
-                    >
-                      <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">
-                        {sec.name}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
-                          {sec.quantity}
+              </button>
+              
+              {expandedIndex === i && item.sections.length > 0 && (
+                <div className="mt-1 ml-8 px-4 py-3 bg-white border border-blue-50 rounded-2xl animate-fade-in shadow-inner overflow-hidden">
+                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-50 pb-1 flex justify-between">
+                    <span>Desglose</span>
+                    <span>Cant. / %</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {item.sections.map((sec, j) => (
+                      <div 
+                        key={`sec-${j}`} 
+                        className="flex justify-between items-center group/item hover:bg-blue-50/50 rounded px-1 transition-colors cursor-default"
+                        onMouseEnter={() => setHighlightedIndex(i)}
+                      >
+                        <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">
+                          {sec.name}
                         </span>
-                        <span className="text-[9px] font-bold text-slate-400">
-                          {sec.percent}%
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                            {sec.quantity}
+                          </span>
+                          <span className="text-[9px] font-bold text-slate-400">
+                            {sec.percent}%
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -366,7 +395,7 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
       {isOpen && suggestions.length > 0 && (
         <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
           {suggestions.map((p) => (
-            <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors active:bg-blue-100">
+            <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors i-active:bg-blue-100">
               <div className="flex items-center gap-3 flex-1 pr-3 truncate">
                 {p.imageUrl && (
                   <img 
@@ -408,13 +437,13 @@ const App: React.FC = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [deliveryFilters, setDeliveryFilters] = useState({
-    persona: '', seccion: '', departamento: '', fechaInicio: '', fechaFin: ''
+    seccion: '', departamento: '', fechaInicio: '', fechaFin: ''
   });
 
   const [solicitudStep, setSolicitudStep] = useState<'crear' | 'cerrar'>('crear');
   const [solicitudFilters, setSolicitudFilters] = useState(() => {
     const saved = localStorage.getItem('solicitud_filters_v12');
-    return saved ? JSON.parse(saved) : { persona: '', departamento: '', seccion: '' };
+    return saved ? JSON.parse(saved) : { departamento: '', seccion: '' };
   });
   const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
   
@@ -442,7 +471,6 @@ const App: React.FC = () => {
           id: key,
           producto: data[key].producto,
           cantidad: data[key].cantidad,
-          persona: data[key].persona,
           departamento: data[key].departamento,
           seccion: data[key].seccion
         }));
@@ -502,7 +530,6 @@ const App: React.FC = () => {
           .map(([sec, q]) => ({
             name: sec || 'N/A',
             quantity: q,
-            // Porcentaje relativo al total global (flecha) para que sumen el % del producto
             percent: globalTotal > 0 ? Math.round((q / globalTotal) * 100) : 0 
           }))
           .sort((a,b) => b.quantity - a.quantity)
@@ -542,20 +569,26 @@ const App: React.FC = () => {
           responsible: cols[3] || 'Sin asignar',
           link: cols[4] || '', 
           imageUrl: cols[5] || '', 
-          category: 'General',
+          category: cols[6] || 'General',
           arrivalDate: new Date().toISOString()
         }));
         setInventory(newInv);
       } else {
-        const newDel = rows.map((cols, i) => ({
-          id: `del-${i}-${Date.now()}`,
-          cantidad: parseInt(cols[0]?.replace(/[^0-9]/g, '') || '0') || 0,
-          producto: cols[1]?.trim() || '',
-          persona: cols[2]?.trim() || '',
-          departamento: cols[3]?.trim() || '',
-          seccion: cols[4]?.trim() || '',
-          fecha: cols[5]?.trim() || ''
-        }));
+        const newDel = rows.map((cols, i) => {
+          const isExtended = cols.length >= 6;
+          const fechaIdx = isExtended ? 5 : 4; 
+          const deptoIdx = isExtended ? 3 : 2;
+          const seccionIdx = isExtended ? 4 : 3;
+
+          return {
+            id: `del-${i}-${Date.now()}`,
+            cantidad: parseInt(cols[0]?.replace(/[^0-9]/g, '') || '0') || 0,
+            producto: cols[1]?.trim() || '',
+            seccion: cols[seccionIdx]?.trim() || '', 
+            departamento: cols[deptoIdx]?.trim() || '',
+            fecha: cols[fechaIdx]?.trim() || '' 
+          };
+        });
         setDeliveryData(newDel);
       }
     } catch (e: any) {
@@ -583,12 +616,6 @@ const App: React.FC = () => {
     };
   }, [sourceLink]);
 
-  const allPossiblePersonas = useMemo(() => {
-    const set = new Set<string>();
-    deliveryData.forEach(d => { if(d.persona) set.add(d.persona); });
-    return Array.from(set).filter(Boolean).sort();
-  }, [deliveryData]);
-
   const allPossibleDeptos = useMemo(() => {
     const set = new Set<string>();
     deliveryData.forEach(d => { if(d.departamento) set.add(d.departamento); });
@@ -607,33 +634,31 @@ const App: React.FC = () => {
   const filteredDelivery = useMemo(() => {
     return deliveryData
       .filter(d => {
-        const matchPersona = !deliveryFilters.persona || (d.persona && d.persona.toLowerCase().includes(deliveryFilters.persona.toLowerCase()));
-        const matchSeccion = !deliveryFilters.seccion || d.seccion === deliveryFilters.seccion;
+        const matchSeccion = !deliveryFilters.seccion || (d.seccion && d.seccion.toLowerCase().includes(deliveryFilters.seccion.toLowerCase()));
         const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento;
         const itemDate = getNormalizedTimestamp(d.fecha);
-        if (!itemDate) return matchPersona && matchSeccion && matchDepto;
+        if (!itemDate) return matchSeccion && matchDepto;
         const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio).getTime() : null;
         const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin).getTime() : null;
-        return matchPersona && matchSeccion && matchDepto && (!start || itemDate >= start) && (!end || itemDate <= end);
+        return matchSeccion && matchDepto && (!start || itemDate >= start) && (!end || itemDate <= end);
       })
       .sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
   }, [deliveryData, deliveryFilters]);
 
   const isDeliveryFilterActive = useMemo(() => {
-    return !!(deliveryFilters.persona.trim() || deliveryFilters.seccion || deliveryFilters.departamento || deliveryFilters.fechaInicio || deliveryFilters.fechaFin);
+    return !!(deliveryFilters.seccion.trim() || deliveryFilters.departamento || deliveryFilters.fechaInicio || deliveryFilters.fechaFin);
   }, [deliveryFilters]);
 
-  const handleSolicitantePersonaChange = (val: string) => {
+  const handleSolicitanteSeccionChange = (val: string) => {
     const trimmedVal = val.trim();
     setSolicitudFilters(prev => {
-      const newState = { ...prev, persona: val };
+      const newState = { ...prev, seccion: val };
       if (trimmedVal !== '') {
         const match = [...deliveryData].reverse().find(d => 
-          d.persona && d.persona.trim().toLowerCase() === trimmedVal.toLowerCase()
+          d.seccion && d.seccion.trim().toLowerCase() === trimmedVal.toLowerCase()
         );
         if (match) {
           newState.departamento = match.departamento || prev.departamento;
-          newState.seccion = match.seccion || prev.seccion;
         }
       }
       return newState;
@@ -650,11 +675,11 @@ const App: React.FC = () => {
   };
 
   const loadPreviousOrder = async () => {
-    const personName = solicitudFilters.persona.trim().toLowerCase();
-    if (!personName) return;
-    const personDeliveries = deliveryData.filter(d => d.persona.trim().toLowerCase() === personName);
-    if (personDeliveries.length === 0) return;
-    const sorted = [...personDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
+    const seccionName = solicitudFilters.seccion.trim().toLowerCase();
+    if (!seccionName) return;
+    const seccionDeliveries = deliveryData.filter(d => d.seccion.trim().toLowerCase() === seccionName);
+    if (seccionDeliveries.length === 0) return;
+    const sorted = [...seccionDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
     const latestDate = sorted[0].fecha;
     const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate);
     await clearTemporaryOrders();
@@ -662,7 +687,6 @@ const App: React.FC = () => {
     const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, {
       producto: item.producto,
       cantidad: item.cantidad,
-      persona: solicitudFilters.persona,
       departamento: solicitudFilters.departamento,
       seccion: solicitudFilters.seccion
     }));
@@ -670,18 +694,18 @@ const App: React.FC = () => {
   };
 
   const addItemToOrder = async (p: Product) => {
-    const { persona, departamento, seccion } = solicitudFilters;
+    const { departamento, seccion } = solicitudFilters;
     try {
       const existing = currentOrderItems.find(item => 
         item.producto === p.name && 
-        item.persona === persona
+        item.seccion === seccion
       );
       if (existing && existing.id) {
         const itemRef = ref(db, `pedidos_temporales/${existing.id}`);
         await update(itemRef, { cantidad: existing.cantidad + 1 });
       } else {
         const itemsRef = ref(db, "pedidos_temporales");
-        await push(itemsRef, { producto: p.name, cantidad: 1, persona, departamento, seccion });
+        await push(itemsRef, { producto: p.name, cantidad: 1, departamento, seccion });
       }
     } catch (err) {
       console.error("Add item error:", err);
@@ -702,13 +726,12 @@ const App: React.FC = () => {
   };
 
   const finalizarPedido = async () => {
-    const { persona, departamento, seccion } = solicitudFilters;
-    if (!persona.trim() || !departamento.trim() || !seccion.trim()) return;
-    const userItems = currentOrderItems.filter(i => i.persona === persona);
+    const { departamento, seccion } = solicitudFilters;
+    if (!departamento.trim() || !seccion.trim()) return;
+    const userItems = currentOrderItems.filter(i => i.seccion === seccion);
     if (userItems.length === 0) return;
     const fechaActual = new Date().toLocaleDateString('es-ES');
     const newRequestData = {
-      persona: persona.trim(),
       departamento: departamento.trim(),
       seccion: seccion.trim(),
       fecha: fechaActual,
@@ -720,7 +743,7 @@ const App: React.FC = () => {
       for (const item of userItems) {
         if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); }
       }
-      setSolicitudFilters({ persona: '', departamento: '', seccion: '' });
+      setSolicitudFilters({ departamento: '', seccion: '' });
       setSolicitudStep('cerrar');
     } catch (err) {
       console.error("Error al finalizar:", err);
@@ -729,12 +752,21 @@ const App: React.FC = () => {
 
   const handleConfirmOk = async (req: FinalizedRequest) => {
     try {
-      const dataToSend = { persona: req.persona, departamento: req.departamento, seccion: req.seccion, items: req.items };
+      const dataToSend = { departamento: req.departamento, seccion: req.seccion, items: req.items };
       await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) });
       const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`);
       await remove(reqRef);
     } catch (e) {
       console.error("Error procesando acción OK:", e);
+    }
+  };
+
+  const handleCancelRequest = async (reqId: string) => {
+    try {
+      const reqRef = ref(db, `solicitudes_finalizadas/${reqId}`);
+      await remove(reqRef);
+    } catch (e) {
+      console.error("Error cancelando pedido:", e);
     }
   };
 
@@ -765,7 +797,7 @@ const App: React.FC = () => {
     { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' },
     { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' },
     { id: AppSection.SOLICITUD, icon: <ICONS.Solicitud />, label: 'Solicitud' },
-    { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Entrega' },
+    { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Historial' },
     { id: AppSection.SETTINGS, icon: <ICONS.Settings />, label: 'Ajustes' },
   ];
 
@@ -773,10 +805,17 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col md:flex-row bg-[#f8fafc] pb-24 md:pb-0 font-['Plus_Jakarta_Sans']">
       <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col fixed h-full z-20 shadow-sm">
         <div className="p-8 flex items-center gap-4"><CustomLogo /><h1 className="font-black text-base text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-sm">Bodega</span></h1></div>
-        <nav className="flex-1 px-5 space-y-2 mt-2">
+        <nav className="flex-1 px-4 space-y-1 mt-4">
           {navItems.map((item) => (
-            <button key={item.id} onClick={() => setActiveSection(item.id)} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all font-black text-xs uppercase tracking-widest ${activeSection === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 scale-[1.02]' : 'text-slate-400 hover:bg-slate-50'}`}>
-              {item.icon} <span>{item.label}</span>
+            <button key={item.id} onClick={() => setActiveSection(item.id)} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all font-black text-xs uppercase tracking-widest ${activeSection === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 scale-[1.02]' : 'text-slate-500 hover:bg-slate-50'}`}>
+              <div className="flex items-center gap-4">
+                {item.icon} <span>{item.label}</span>
+              </div>
+              {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
+                <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded-full text-[9px] font-black">
+                  {finalizedRequests.length}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -800,17 +839,12 @@ const App: React.FC = () => {
 
         {activeSection === AppSection.DASHBOARD && (
           <div className="space-y-6 md:space-y-10 animate-fade-in">
-            <div className="bg-white p-6 md:p-12 rounded-[40px] shadow-sm border border-slate-100">
-               <h3 className="text-xs font-black text-slate-800 mb-10 uppercase tracking-widest flex items-center gap-3">
-                 <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
-                 Top 5 Productos Solicitados
-               </h3>
-               {deliveryStats.top5.length > 0 ? ( 
-                 <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} /> 
-               ) : (
-                 <div className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest">No hay datos aún.</div>
-               )}
-            </div>
+            {deliveryStats.top5.length > 0 ? ( 
+              <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} title="Top 5 Productos Solicitados" /> 
+            ) : (
+              <div className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest bg-white border rounded-[40px]">No hay datos suficientes para visualizar el gráfico.</div>
+            )}
+
             {!isChatOpen ? (
               <button onClick={() => setIsChatOpen(true)} className="w-full bg-blue-600 p-8 md:p-10 rounded-[32px] md:rounded-[40px] shadow-2xl text-white flex items-center justify-between group hover:bg-blue-700 transition-all active:translate-y-1"><div className="text-left"><h4 className="text-lg md:text-2xl font-black uppercase tracking-tighter leading-none mb-2 md:mb-3">Asistente Logístico IA</h4><p className="text-blue-100 text-[11px] md:text-[13px] opacity-90 uppercase tracking-widest font-bold">Resuelve dudas sobre stock.</p></div><div className="bg-white/20 p-4 md:p-5 rounded-2xl group-hover:scale-110 transition-transform"><ICONS.Search /></div></button>
             ) : (
@@ -838,7 +872,7 @@ const App: React.FC = () => {
                        />
                      </div>
                    )}
-                   <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-2 rounded-full mb-6 inline-block">Ficha de Producto</span>
+                   <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-2 rounded-full mb-6 flex items-center gap-2 max-w-fit">Ficha de Producto</span>
                    <h4 className="text-2xl md:text-4xl font-black text-slate-800 uppercase leading-none mb-8">{selectedProduct.name}</h4>
                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
                       <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Ubicación</p><p className="text-lg text-slate-800 font-bold uppercase">{selectedProduct.location}</p></div>
@@ -858,29 +892,24 @@ const App: React.FC = () => {
           <div className="animate-fade-in space-y-4">
             <div className="bg-white p-4 md:p-6 rounded-[24px] shadow-sm border border-slate-100">
                <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-black text-slate-800 text-[10px] md:text-xs uppercase tracking-widest">Solicitante</h3>
-                 <button onClick={() => setSolicitudFilters({ persona: '', departamento: '', seccion: '' })} className="text-rose-500 font-bold text-[8px] uppercase hover:underline">LIMPIAR</button>
+                 <h3 className="font-black text-slate-800 text-[10px] md:text-xs uppercase tracking-widest">Sección Solicitante</h3>
+                 <button onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} className="text-rose-500 font-bold text-[8px] uppercase hover:underline">LIMPIAR</button>
                </div>
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Persona</label>
-                    <input type="text" list="personas-list-smart" value={solicitudFilters.persona} onChange={(e) => handleSolicitantePersonaChange(e.target.value)} placeholder="Nombre..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
-                    <datalist id="personas-list-smart">{allPossiblePersonas.map(p => <option key={p} value={p} />)}</datalist>
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sección</label>
+                    <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => handleSolicitanteSeccionChange(e.target.value)} placeholder="Ej: Laboratorio..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
+                    <datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Departamento</label>
                     <input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="Depto..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
                     <datalist id="deptos-list-smart">{allPossibleDeptos.map(d => <option key={d} value={d} />)}</datalist>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sección</label>
-                    <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => setSolicitudFilters({...solicitudFilters, seccion: e.target.value})} placeholder="Sección..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
-                    <datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
-                  </div>
                </div>
-               {solicitudFilters.persona.trim() !== '' && (
+               {solicitudFilters.seccion.trim() !== '' && (
                  <div className="mt-3">
-                   <button onClick={loadPreviousOrder} className="bg-blue-50 text-blue-600 font-black px-4 py-2 rounded-lg text-[8px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"><ICONS.Delivery /> PEDIDO ANTERIOR</button>
+                   <button onClick={loadPreviousOrder} className="bg-blue-50 text-blue-600 font-black px-4 py-2 rounded-lg text-[8px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"><ICONS.Delivery /> REPETIR ÚLTIMO PEDIDO</button>
                  </div>
                )}
             </div>
@@ -896,11 +925,11 @@ const App: React.FC = () => {
                   <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-widest">Añadir Productos</h4>
                   <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe para añadir rápido..." />
                 </div>
-                {currentOrderItems.filter(i => i.persona === solicitudFilters.persona).length > 0 && (
+                {currentOrderItems.filter(i => i.seccion === solicitudFilters.seccion).length > 0 && (
                   <div className="bg-white rounded-[24px] border shadow-sm overflow-hidden animate-fade-in">
                     <div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h4 className="font-black text-slate-800 text-[9px] uppercase tracking-widest">Lista Temporal</h4><button onClick={clearTemporaryOrders} className="text-rose-500 font-bold text-[8px] uppercase">LIMPIAR LISTA</button></div>
                     <div className="divide-y divide-slate-50">
-                      {currentOrderItems.filter(i => i.persona === solicitudFilters.persona).map((item, i) => (
+                      {currentOrderItems.filter(i => i.seccion === solicitudFilters.seccion).map((item, i) => (
                         <div key={item.id || i} className="p-3 md:p-4 flex justify-between items-center">
                           <div className="flex items-center gap-3"><span className="font-bold text-slate-800 text-xs uppercase">{item.producto}</span></div>
                           <div className="flex items-center gap-3">
@@ -925,9 +954,12 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {finalizedRequests.map((req) => (
                       <div key={req.id} className="bg-white rounded-[24px] border shadow-md overflow-hidden flex flex-col animate-fade-in">
-                        <div className="p-4 bg-blue-50 border-b"><div className="flex justify-between items-center mb-2"><span className="bg-white px-2 py-0.5 rounded-full font-black text-[7px] text-blue-600 uppercase tracking-widest">#{req.id.split('-').pop()}</span><span className="text-[8px] font-bold text-slate-400">{req.fecha}</span></div><h4 className="font-black text-slate-800 text-sm uppercase leading-none tracking-tight">{req.persona}</h4><p className="text-[7px] font-bold text-blue-600 uppercase tracking-widest mt-1 truncate">{req.departamento} | {req.seccion}</p></div>
+                        <div className="p-4 bg-blue-50 border-b"><div className="flex justify-between items-center mb-2"><span className="bg-white px-2 py-0.5 rounded-full font-black text-[7px] text-blue-600 uppercase tracking-widest">#{req.id.split('-').pop()}</span><span className="text-[8px] font-bold text-slate-400">{req.fecha}</span></div><h4 className="font-black text-slate-800 text-sm uppercase leading-none tracking-tight">{req.seccion}</h4><p className="text-[7px] font-bold text-blue-600 uppercase tracking-widest mt-1 truncate">{req.departamento}</p></div>
                         <div className="p-4 flex-1 space-y-2">{req.items.map((item, idx) => ( <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-dashed pb-1"><span className="text-slate-800 uppercase truncate pr-2">{item.producto}</span><span className="text-blue-600 font-black">x{item.cantidad}</span></div> ))}</div>
-                        <div className="p-4 bg-slate-50"><button onClick={() => handleConfirmOk(req)} className="w-full bg-blue-600 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-blue-800 active:scale-95 transition-all">OK</button></div>
+                        <div className="p-4 bg-slate-50 flex gap-2">
+                          <button onClick={() => handleCancelRequest(req.id)} className="flex-1 bg-rose-500 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-rose-700 active:scale-95 transition-all">CANCELAR</button>
+                          <button onClick={() => handleConfirmOk(req)} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-blue-800 active:scale-95 transition-all">OK</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -941,19 +973,18 @@ const App: React.FC = () => {
           <div className="animate-fade-in space-y-6 md:space-y-10">
             <div className="bg-white p-5 md:p-10 rounded-[32px] shadow-sm border border-slate-100">
                <div className="flex justify-between items-center mb-8"><h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-widest">Búsqueda en Historial</h3><button onClick={() => syncData('delivery')} disabled={isSyncing} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg">{isSyncing ? '...' : 'Actualizar'}</button></div>
-               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Persona</label><input type="text" list="personas-entrega-list" value={deliveryFilters.persona} onChange={(e) => setDeliveryFilters({...deliveryFilters, persona: e.target.value})} placeholder="Buscar..." className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500" /><datalist id="personas-entrega-list">{allPossiblePersonas.map(p => <option key={p} value={p} />)}</datalist></div>
-                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sección</label><select value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase appearance-none"><option value="">TODAS</option>{uniqueSeccionesHistory.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
-                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Depto</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase appearance-none"><option value="">TODOS</option>{uniqueDepartamentosHistory.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sección</label><input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="Buscar..." className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500" /><datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist></div>
+                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Departamento</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase appearance-none"><option value="">TODOS</option>{uniqueDepartamentosHistory.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
                   <div className="grid grid-cols-2 gap-4 md:col-span-2"><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Desde</label><input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs font-bold" /></div><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hasta</label><input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs font-bold" /></div></div>
-                  <div className="flex items-end"><button onClick={() => setDeliveryFilters({persona: '', seccion: '', departamento: '', fechaInicio: '', fechaFin: ''})} className="w-full py-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Limpiar</button></div>
+                  <div className="flex items-end"><button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: ''})} className="w-full py-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Limpiar Filtros</button></div>
                </div>
             </div>
             
             {isDeliveryFilterActive && (
               <div className="bg-white rounded-[40px] shadow-sm border overflow-hidden animate-fade-in">
                 <div className="p-8 border-b bg-blue-50 flex justify-between items-center"><div><h3 className="font-black text-blue-800 text-sm md:text-base uppercase tracking-tight">Registro de Entregas</h3><p className="text-blue-600 text-[10px] font-bold uppercase mt-1 tracking-widest">{filteredDelivery.length} resultados</p></div><div className="bg-white px-5 py-3 rounded-2xl border text-center"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total</p><p className="text-xl font-black text-blue-600">{filteredDelivery.reduce((acc, curr) => acc + (curr.cantidad || 0), 0)}</p></div></div>
-                <div className="overflow-x-auto"><table className="w-full text-left table-fixed min-w-[800px]"><thead className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-widest"><tr><th className="px-8 py-6 w-20 text-center">Cant.</th><th className="px-8 py-6 w-1/3">Producto</th><th className="px-8 py-6">Persona</th><th className="px-8 py-6">Sección</th><th className="px-8 py-6">Depto</th><th className="px-8 py-6 w-32">Fecha</th></tr></thead><tbody className="text-slate-600 text-[11px] divide-y">{filteredDelivery.map((d, idx) => (<tr key={idx} className="hover:bg-slate-50 transition-colors"><td className="px-8 py-4 text-center font-black text-slate-800 text-sm">{d.cantidad}</td><td className="px-8 py-4 font-bold text-blue-600 uppercase truncate">{d.producto}</td><td className="px-8 py-4 font-black text-slate-800 uppercase tracking-tight truncate">{d.persona}</td><td className="px-8 py-4 font-bold text-slate-800 uppercase truncate">{d.seccion}</td><td className="px-8 py-4 font-bold text-slate-400 uppercase truncate">{d.departamento}</td><td className="px-8 py-4 font-bold text-slate-400">{d.fecha}</td></tr>))}{filteredDelivery.length === 0 && (<tr><td colSpan={6} className="px-8 py-20 text-center"><p className="font-black text-slate-300 text-[12px] uppercase tracking-widest">No hay registros</p></td></tr>)}</tbody></table></div>
+                <div className="overflow-x-auto"><table className="w-full text-left table-fixed min-w-[800px]"><thead className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-widest"><tr><th className="px-8 py-6 w-20 text-center">Cant.</th><th className="px-8 py-6 w-1/3">Producto</th><th className="px-8 py-6">Sección</th><th className="px-8 py-6">Depto</th><th className="px-8 py-6 w-48">Fecha</th></tr></thead><tbody className="text-slate-600 text-[11px] divide-y">{filteredDelivery.map((d, idx) => (<tr key={idx} className="hover:bg-slate-50 transition-colors"><td className="px-8 py-4 text-center font-black text-slate-800 text-sm">{d.cantidad}</td><td className="px-8 py-4 font-bold text-blue-600 uppercase truncate">{d.producto}</td><td className="px-8 py-4 font-black text-slate-800 uppercase tracking-tight truncate">{d.seccion}</td><td className="px-8 py-4 font-bold text-slate-800 uppercase truncate">{d.departamento}</td><td className="px-8 py-4 font-bold text-slate-500 bg-slate-50/50">{d.fecha}</td></tr>))}{filteredDelivery.length === 0 && (<tr><td colSpan={5} className="px-8 py-20 text-center"><p className="font-black text-slate-300 text-[12px] uppercase tracking-widest">No hay registros</p></td></tr>)}</tbody></table></div>
               </div>
             )}
           </div>
@@ -966,7 +997,15 @@ const App: React.FC = () => {
 
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-50 shadow-2xl">
         {navItems.map((item) => (
-          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}><div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''}`}>{item.icon}</div><span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span></button>
+          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`relative flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
+            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''}`}>{item.icon}</div>
+            <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
+            {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
+              <span className="absolute -top-1 right-2 bg-rose-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black border-2 border-white">
+                {finalizedRequests.length}
+              </span>
+            )}
+          </button>
         ))}
       </nav>
     </div>
