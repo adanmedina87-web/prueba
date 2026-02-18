@@ -174,8 +174,11 @@ interface ProductStat {
 
 const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ data, globalTotal }) => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
+  
   const localSum = data.reduce((sum, item) => sum + item.total, 0);
   const displayTotal = globalTotal || localSum;
+  
   const colors = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
   const radiusX = 140;
   const radiusY = 75;
@@ -188,14 +191,21 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ d
   if (localSum === 0) return null;
 
   return (
-    <div className="flex flex-col lg:flex-row items-center justify-between gap-10 animate-fade-in">
-      <div className="relative w-full max-w-[320px] lg:max-w-[420px]">
-        <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_25px_rgba(0,0,0,0.15)]">
+    <div className="flex flex-col lg:flex-row items-start justify-between gap-10 animate-fade-in">
+      {/* Chart container remains stable at top */}
+      <div className="relative w-full max-w-[320px] lg:max-w-[420px] sticky top-0">
+        <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_25px_rgba(0,0,0,0.15)] overflow-visible">
           {data.map((item, i) => {
             const sliceAngle = (item.total / localSum) * 2 * Math.PI;
             const startAngle = currentAngle;
             const endAngle = currentAngle + sliceAngle;
             currentAngle = endAngle;
+
+            const isHighlighted = highlightedIndex === i;
+            const explodeOffset = isHighlighted ? 20 : 0;
+            const midAngle = startAngle + (sliceAngle / 2);
+            const ox = explodeOffset * Math.cos(midAngle);
+            const oy = explodeOffset * Math.sin(midAngle);
 
             const x1 = centerX + radiusX * Math.cos(startAngle);
             const y1 = centerY + radiusY * Math.sin(startAngle);
@@ -205,7 +215,14 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ d
             const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
 
             return (
-              <g key={`slice-group-${i}`}>
+              <g 
+                key={`slice-group-${i}`}
+                style={{ 
+                  transform: `translate(${ox}px, ${oy}px)`, 
+                  transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)' 
+                }}
+              >
+                {/* 3D Sides */}
                 <path
                   d={`
                     M ${x1} ${y1} 
@@ -217,6 +234,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ d
                   fill={colors[i % colors.length]}
                   filter="brightness(0.7)"
                 />
+                {/* Top Slice */}
                 <path
                   d={`
                     M ${centerX} ${centerY} 
@@ -236,7 +254,12 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ d
 
       <div className="flex-1 w-full space-y-2">
         {data.map((item, i) => (
-          <div key={`legend-${i}`} className="group transition-all">
+          <div 
+            key={`legend-${i}`} 
+            className="group transition-all"
+            onMouseEnter={() => setHighlightedIndex(i)}
+            onMouseLeave={() => setHighlightedIndex(null)}
+          >
             <button 
               onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
               className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all ${expandedIndex === i ? 'bg-blue-50 shadow-sm' : 'hover:bg-slate-50'}`}
@@ -265,11 +288,16 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number }> = ({ d
               <div className="mt-1 ml-8 px-4 py-3 bg-white border border-blue-50 rounded-2xl animate-fade-in shadow-inner overflow-hidden">
                 <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-50 pb-1 flex justify-between">
                   <span>Sección</span>
-                  <span>Cant. / %</span>
+                  <span>Cant. / % (Global)</span>
                 </div>
                 <div className="space-y-1.5">
                   {item.sections.map((sec, j) => (
-                    <div key={`sec-${j}`} className="flex justify-between items-center group/item">
+                    <div 
+                      key={`sec-${j}`} 
+                      className="flex justify-between items-center group/item hover:bg-slate-50 rounded px-1 transition-colors"
+                      onMouseEnter={() => setHighlightedIndex(i)}
+                      onMouseLeave={() => setHighlightedIndex(null)}
+                    >
                       <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">
                         {sec.name}
                       </span>
@@ -474,7 +502,7 @@ const App: React.FC = () => {
           .map(([sec, q]) => ({
             name: sec || 'N/A',
             quantity: q,
-            // Calculate percentage relative to the same base as the product percentage (globalTotal)
+            // Porcentaje relativo al total global (flecha) para que sumen el % del producto
             percent: globalTotal > 0 ? Math.round((q / globalTotal) * 100) : 0 
           }))
           .sort((a,b) => b.quantity - a.quantity)
