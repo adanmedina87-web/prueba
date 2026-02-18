@@ -81,7 +81,7 @@ enum AppSection {
 }
 
 // --- 2. CONSTANTES E ICONOS ---
-const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit#gid=507872400';
+const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?gid=507872400#gid=507872400';
 const DELIVERY_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?usp=sharing';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9R2ocvOKfUpf78kVjZxG9EL5tbGxqtvu2Y-YeM7ADGbA41JdHdJ0GRmCJ3Qh8-LY/exec';
 
@@ -442,7 +442,7 @@ const App: React.FC = () => {
 
   const [solicitudStep, setSolicitudStep] = useState<'crear' | 'cerrar'>('crear');
   const [solicitudFilters, setSolicitudFilters] = useState(() => {
-    const saved = localStorage.getItem('solicitud_filters_v12');
+    const saved = localStorage.getItem('solicitud_filters_v14');
     return saved ? JSON.parse(saved) : { departamento: '', seccion: '' };
   });
   const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
@@ -450,17 +450,12 @@ const App: React.FC = () => {
   const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>([]);
 
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [aiLoading, setAiLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { localStorage.setItem('inv_v4_final', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { localStorage.setItem('inv_link_v4_final', sourceLink); }, [sourceLink]);
   useEffect(() => { localStorage.setItem('del_v4_final', JSON.stringify(deliveryData)); }, [deliveryData]);
-  useEffect(() => { localStorage.setItem('solicitud_filters_v12', JSON.stringify(solicitudFilters)); }, [solicitudFilters]);
+  useEffect(() => { localStorage.setItem('solicitud_filters_v14', JSON.stringify(solicitudFilters)); }, [solicitudFilters]);
 
   useEffect(() => {
     const itemsRef = ref(db, "pedidos_temporales");
@@ -499,9 +494,6 @@ const App: React.FC = () => {
       unsubscribeFinalized();
     };
   }, []);
-
-  const scrollToBottom = () => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  useEffect(() => { if (isChatOpen) scrollToBottom(); }, [chatMessages, isChatOpen]);
 
   const deliveryStats = useMemo(() => {
     const productDataMap: Record<string, { total: number, sections: Record<string, number> }> = {};
@@ -770,29 +762,6 @@ const App: React.FC = () => {
     }
   };
 
-  const askAi = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const form = e.currentTarget;
-    const query = new FormData(form).get('ai-query') as string;
-    if (!query) return;
-    const newUserMsg: ChatMessage = { role: 'user', text: query, timestamp: new Date() };
-    setChatMessages(prev => [...prev, newUserMsg]);
-    form.reset();
-    setAiLoading(true);
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const contextText = inventory.slice(0, 30).map(i => `${i.name}: ${i.quantity} en ${i.location}`).join(' | ');
-      const res = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
-        contents: `Contexto: ${contextText}\nPregunta: ${query}`,
-        config: { systemInstruction: "Asistente logístico. Respuestas muy cortas y directas." }
-      });
-      setChatMessages(prev => [...prev, { role: 'ai', text: res.text || 'Sin respuesta.', timestamp: new Date() }]);
-    } catch (err) {
-      setChatMessages(prev => [...prev, { role: 'system', text: 'Error IA.', timestamp: new Date() }]);
-    } finally { setAiLoading(false); }
-  };
-
   const navItems = [
     { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' },
     { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' },
@@ -812,7 +781,7 @@ const App: React.FC = () => {
                 {item.icon} <span>{item.label}</span>
               </div>
               {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
-                <span className="bg-rose-500 text-white px-1.5 py-0.5 rounded-full text-[9px] font-black">
+                <span className="bg-rose-500 !text-white px-1.5 py-0.5 rounded-full text-[8px] font-black leading-none flex items-center justify-center">
                   {finalizedRequests.length}
                 </span>
               )}
@@ -827,7 +796,7 @@ const App: React.FC = () => {
             <div className="hidden md:block">
               <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tighter uppercase leading-none">
                 {activeSection === AppSection.DASHBOARD && 'Vista General'}
-                {activeSection === AppSection.QUERY && 'Consultas de Activos'}
+                {activeSection === AppSection.QUERY && 'Consultas de Productos'}
                 {activeSection === AppSection.SOLICITUD && 'Gestión de Solicitudes'}
                 {activeSection === AppSection.ENTREGA && 'Control de Historial'}
                 {activeSection === AppSection.SETTINGS && 'Configuración'}
@@ -844,12 +813,6 @@ const App: React.FC = () => {
             ) : (
               <div className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest bg-white border rounded-[40px]">No hay datos suficientes para visualizar el gráfico.</div>
             )}
-
-            {!isChatOpen ? (
-              <button onClick={() => setIsChatOpen(true)} className="w-full bg-blue-600 p-8 md:p-10 rounded-[32px] md:rounded-[40px] shadow-2xl text-white flex items-center justify-between group hover:bg-blue-700 transition-all active:translate-y-1"><div className="text-left"><h4 className="text-lg md:text-2xl font-black uppercase tracking-tighter leading-none mb-2 md:mb-3">Asistente Logístico IA</h4><p className="text-blue-100 text-[11px] md:text-[13px] opacity-90 uppercase tracking-widest font-bold">Resuelve dudas sobre stock.</p></div><div className="bg-white/20 p-4 md:p-5 rounded-2xl group-hover:scale-110 transition-transform"><ICONS.Search /></div></button>
-            ) : (
-              <div className="bg-white rounded-[32px] shadow-2xl border border-slate-100 overflow-hidden flex flex-col h-[400px] md:h-[500px] animate-fade-in"><div className="p-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center"><span className="font-black text-[10px] uppercase tracking-widest text-slate-500">IA Bodega</span><button onClick={() => setIsChatOpen(false)} className="text-slate-400 p-2 hover:bg-slate-200 rounded-xl"><ICONS.ExternalLink /></button></div><div className="flex-1 overflow-y-auto p-4 space-y-4">{chatMessages.map((msg, i) => (<div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}><div className={`max-w-[85%] px-4 py-2 rounded-2xl text-[13px] font-bold ${msg.role === 'user' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-800'}`}>{msg.text}</div></div>))}<div ref={chatEndRef} /></div><form onSubmit={askAi} className="p-4 border-t border-slate-100 flex gap-2"><input name="ai-query" placeholder="Pregunta algo..." className="flex-1 bg-slate-50 border rounded-xl px-4 py-3 outline-none text-sm font-bold uppercase" /><button className="bg-blue-600 text-white px-4 rounded-xl shadow-xl"><ICONS.Search /></button></form></div>
-            )}
           </div>
         )}
 
@@ -857,7 +820,7 @@ const App: React.FC = () => {
           <div className="animate-fade-in space-y-6 md:space-y-10">
             <div className="bg-white p-6 md:p-10 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100">
                <h3 className="text-sm font-black text-slate-800 mb-6 uppercase tracking-widest text-center">Buscador de Productos</h3>
-               <AutocompleteSearch products={inventory} onSelect={setSelectedProduct} />
+               <AutocompleteSearch products={inventory} onSelect={setSelectedProduct} placeholder="Escribe el nombre del producto..." />
             </div>
             {selectedProduct && (
               <div className="max-w-3xl mx-auto animate-fade-in">
@@ -898,7 +861,7 @@ const App: React.FC = () => {
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sección</label>
-                    <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => handleSolicitanteSeccionChange(e.target.value)} placeholder="Ej: Laboratorio..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
+                    <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => handleSolicitanteSeccionChange(e.target.value)} placeholder="" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
                     <datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
                   </div>
                   <div className="space-y-1">
@@ -972,7 +935,7 @@ const App: React.FC = () => {
         {activeSection === AppSection.ENTREGA && (
           <div className="animate-fade-in space-y-6 md:space-y-10">
             <div className="bg-white p-5 md:p-10 rounded-[32px] shadow-sm border border-slate-100">
-               <div className="flex justify-between items-center mb-8"><h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-widest">Búsqueda en Historial</h3><button onClick={() => syncData('delivery')} disabled={isSyncing} className="bg-blue-600 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg">{isSyncing ? '...' : 'Actualizar'}</button></div>
+               <div className="flex justify-between items-center mb-8"><h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-widest">Búsqueda en Historial</h3></div>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sección</label><input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="Buscar..." className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500" /><datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist></div>
                   <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Departamento</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase appearance-none"><option value="">TODOS</option>{uniqueDepartamentosHistory.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
@@ -998,10 +961,12 @@ const App: React.FC = () => {
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-50 shadow-2xl">
         {navItems.map((item) => (
           <button key={item.id} onClick={() => setActiveSection(item.id)} className={`relative flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
-            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''}`}>{item.icon}</div>
+            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''}`}>
+              {item.icon}
+            </div>
             <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
             {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
-              <span className="absolute -top-1 right-2 bg-rose-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black border-2 border-white">
+              <span className="absolute -top-1 right-2 bg-rose-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black border-2 border-white leading-none">
                 {finalizedRequests.length}
               </span>
             )}
