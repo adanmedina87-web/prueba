@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Product, AppSection } from './types';
 import { INITIAL_INVENTORY, ICONS } from './constants';
 import { AutocompleteSearch } from './components/AutocompleteSearch';
@@ -7,13 +7,14 @@ import { getInventoryInsights, getCalendarEvents } from './services/gemini';
 
 const CALENDAR_URL = 'https://calendar.google.com/calendar/embed?src=maristas.cl_nibj9c200dlhn4ikddt9g41lgg%40group.calendar.google.com&ctz=America%2FSantiago';
 
+const ShineEffect = () => (
+  <div className="absolute inset-0 w-1/2 h-full bg-white/10 skew-x-[45deg] -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 pointer-events-none"></div>
+);
+
 const NewsTicker: React.FC<{ news: string }> = ({ news }) => {
   if (!news || news === '') return null;
   
-  // Clean news text for display
   const cleanNews = news.replace(/\n/g, '  •  ').replace(/\*/g, '');
-  
-  // Dynamic duration based on content length
   const duration = Math.max(20, Math.floor(cleanNews.length / 8));
 
   return (
@@ -55,7 +56,6 @@ const App: React.FC = () => {
     localStorage.setItem('inventory_source_link', sourceLink);
   }, [sourceLink]);
 
-  // Fetch calendar info once on load
   useEffect(() => {
     const fetchCalendar = async () => {
       const activities = await getCalendarEvents(CALENDAR_URL);
@@ -122,6 +122,10 @@ const App: React.FC = () => {
       let csvUrl = sourceLink;
       if (csvUrl.includes('/edit')) {
         csvUrl = csvUrl.split('/edit')[0] + '/export?format=csv';
+        if (sourceLink.includes('gid=')) {
+          const gidMatch = sourceLink.match(/gid=([0-9]+)/);
+          if (gidMatch) csvUrl += `&gid=${gidMatch[1]}`;
+        }
       } else if (!csvUrl.includes('/export')) {
         csvUrl = csvUrl.replace(/\/$/, '') + '/export?format=csv';
       }
@@ -139,8 +143,9 @@ const App: React.FC = () => {
       if (lines.length < 2) throw new Error('Archivo sin datos suficientes.');
 
       const dataRows = lines.slice(1);
+      // Explicitly typing map return value to Product | null to fix type predicate compatibility issue in filter
       const parsedInventory: Product[] = dataRows
-        .map((line, index) => {
+        .map((line, index): Product | null => {
           const cols = parseCSVLine(line);
           if (cols.length < 2) return null; 
 
@@ -151,6 +156,7 @@ const App: React.FC = () => {
             sku: cols[1]?.substring(0, 10).toUpperCase() || 'S/N',
             location: cols[2] || 'No especificado',
             responsible: cols[3] || 'Sin asignar',
+            minStock: cols[4] ? parseInt(cols[4].replace(/[^0-9]/g, '')) : 0,
             category: 'Inventario General',
             arrivalDate: new Date().toISOString()
           };
@@ -175,8 +181,16 @@ const App: React.FC = () => {
     { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' },
     { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' },
     { id: AppSection.INVENTORY, icon: <ICONS.Inventory />, label: 'Lista' },
-    { id: AppSection.SETTINGS, icon: <ICONS.Settings />, label: 'Config' },
+    { id: AppSection.ORDER, icon: <ICONS.Settings />, label: 'PEDIR' },
   ];
+
+  // Added useMemo to React imports at the top
+  const lowStockItems = useMemo(() => {
+    return inventory.filter(item => {
+      const min = item.minStock || 0;
+      return item.quantity <= min && min > 0;
+    });
+  }, [inventory]);
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#f8fafc] pb-20 md:pb-0">
@@ -194,10 +208,13 @@ const App: React.FC = () => {
             <button
               key={item.id}
               onClick={() => setActiveSection(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeSection === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
+              className={`group relative overflow-hidden w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${activeSection === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-500 hover:bg-slate-50'}`}
             >
-              {item.icon}
-              <span className="font-medium">{item.label}</span>
+              <ShineEffect />
+              <div className="flex items-center gap-3 relative z-10">
+                {item.icon}
+                <span className="font-medium">{item.label}</span>
+              </div>
             </button>
           ))}
         </nav>
@@ -220,7 +237,7 @@ const App: React.FC = () => {
               {activeSection === AppSection.DASHBOARD && 'Vista General'}
               {activeSection === AppSection.QUERY && 'Consultas de Activos'}
               {activeSection === AppSection.INVENTORY && 'Lista de Inventario'}
-              {activeSection === AppSection.SETTINGS && 'Configuración'}
+              {activeSection === AppSection.ORDER && 'PEDIR - Stock Bajo'}
             </h2>
             <p className="text-sm text-slate-500 hidden md:block">Sistema de trazabilidad de productos</p>
           </div>
@@ -236,7 +253,6 @@ const App: React.FC = () => {
 
         {activeSection === AppSection.DASHBOARD && (
           <div className="space-y-6 md:space-y-10 animate-fade-in">
-            {/* Calendar Ticker */}
             <NewsTicker news={tickerNews} />
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
@@ -250,10 +266,13 @@ const App: React.FC = () => {
                   {inventory.reduce((acc, curr) => acc + (curr.quantity || 0), 0)}
                 </h3>
               </div>
-              <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 col-span-2 md:col-span-1">
-                <p className="text-slate-400 text-xs md:text-sm font-medium">Zonas</p>
-                <h3 className="text-2xl md:text-3xl font-bold text-slate-800 mt-1">
-                  {new Set(inventory.map(i => i.location)).size}
+              <div 
+                onClick={() => setActiveSection(AppSection.ORDER)}
+                className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100 col-span-2 md:col-span-1 cursor-pointer hover:border-rose-200 transition-colors"
+              >
+                <p className="text-slate-400 text-xs md:text-sm font-medium">Alertas Stock</p>
+                <h3 className={`text-2xl md:text-3xl font-bold mt-1 ${lowStockItems.length > 0 ? 'text-rose-600 animate-pulse' : 'text-slate-800'}`}>
+                  {lowStockItems.length}
                 </h3>
               </div>
 
@@ -327,10 +346,10 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="space-y-4 md:space-y-6">
-                  <div className="bg-emerald-50 p-6 md:p-8 rounded-2xl border border-emerald-100">
-                    <p className="text-emerald-600 font-bold uppercase text-[10px] tracking-widest">Cantidad Disponible</p>
-                    <h5 className="text-3xl md:text-4xl font-bold text-emerald-800 mt-1">{selectedProduct.quantity}</h5>
-                    <p className="text-emerald-600 text-xs mt-1">Unidades físicas</p>
+                  <div className={`p-6 md:p-8 rounded-2xl border ${selectedProduct.quantity <= (selectedProduct.minStock || 0) ? 'bg-rose-50 border-rose-100' : 'bg-emerald-50 border-emerald-100'}`}>
+                    <p className={`${selectedProduct.quantity <= (selectedProduct.minStock || 0) ? 'text-rose-600' : 'text-emerald-600'} font-bold uppercase text-[10px] tracking-widest`}>Cantidad Disponible</p>
+                    <h5 className={`text-3xl md:text-4xl font-bold mt-1 ${selectedProduct.quantity <= (selectedProduct.minStock || 0) ? 'text-rose-800' : 'text-emerald-800'}`}>{selectedProduct.quantity}</h5>
+                    <p className={`${selectedProduct.quantity <= (selectedProduct.minStock || 0) ? 'text-rose-600' : 'text-emerald-600'} text-xs mt-1`}>Mínimo requerido: {selectedProduct.minStock || 0}</p>
                   </div>
                   <div className="bg-white p-6 md:p-8 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-4">
                     <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl bg-blue-50 flex items-center justify-center font-bold text-blue-600 text-lg md:text-xl shrink-0">
@@ -351,8 +370,9 @@ const App: React.FC = () => {
           <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-fade-in">
             <div className="p-4 md:p-6 border-b border-slate-50 flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
               <h3 className="font-bold text-slate-800 text-sm md:text-base">Listado Completo ({inventory.length})</h3>
-              <button onClick={syncWithGoogleSheets} disabled={isSyncing} className="w-full md:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50">
-                {isSyncing ? 'Actualizando...' : 'Sincronizar ahora'}
+              <button onClick={syncWithGoogleSheets} disabled={isSyncing} className="relative overflow-hidden group w-full md:w-auto bg-blue-600 text-white px-4 py-2 rounded-lg text-xs font-bold disabled:opacity-50">
+                <ShineEffect />
+                <span className="relative z-10">{isSyncing ? 'Actualizando...' : 'Sincronizar ahora'}</span>
               </button>
             </div>
             <div className="overflow-x-auto">
@@ -368,7 +388,7 @@ const App: React.FC = () => {
                 <tbody className="text-slate-600 text-xs md:text-sm">
                   {inventory.map((item, idx) => (
                     <tr key={item.id + idx} className="border-t border-slate-50 hover:bg-slate-50/50">
-                      <td className="px-4 md:px-6 py-4 font-bold text-blue-600">{item.quantity}</td>
+                      <td className={`px-4 md:px-6 py-4 font-bold ${item.quantity <= (item.minStock || 0) ? 'text-rose-600' : 'text-blue-600'}`}>{item.quantity}</td>
                       <td className="px-4 md:px-6 py-4">
                         <div className="font-bold text-slate-800">{item.name}</div>
                         <div className="md:hidden text-[10px] text-slate-400 mt-0.5">{item.location}</div>
@@ -383,47 +403,86 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {activeSection === AppSection.SETTINGS && (
-          <div className="max-w-2xl bg-white p-6 md:p-10 rounded-2xl shadow-sm border border-slate-100 animate-fade-in">
-            <h3 className="text-lg md:text-xl font-bold text-slate-800 mb-6">Origen de Datos</h3>
-            <div className="space-y-6">
-              <div>
-                <label className="block text-xs md:text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">URL de Google Sheets</label>
-                <input
-                  type="url"
-                  value={sourceLink}
-                  onChange={(e) => setSourceLink(e.target.value)}
-                  placeholder="Pegar enlace aquí..."
-                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
-                />
+        {activeSection === AppSection.ORDER && (
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Urgente - Stock Crítico</h3>
+                  <p className="text-sm text-slate-500">Productos que necesitan reposición inmediata (Cantidad ≤ Stock Mínimo)</p>
+                </div>
+                <button 
+                  onClick={syncWithGoogleSheets}
+                  disabled={isSyncing}
+                  className="relative overflow-hidden group bg-rose-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs shadow-lg shadow-rose-100"
+                >
+                  <ShineEffect />
+                  <span className="relative z-10">{isSyncing ? 'Sincronizando...' : 'Actualizar Inventario'}</span>
+                </button>
               </div>
 
-              {syncStatus.type && (
-                <div className={`p-4 rounded-xl border flex items-center gap-3 animate-fade-in text-sm font-medium ${syncStatus.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'}`}>
-                  {syncStatus.message}
+              {lowStockItems.length === 0 ? (
+                <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                  <p className="text-slate-400 font-medium">No hay alertas críticas en este momento.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {lowStockItems.map((item, idx) => (
+                    <div key={idx} className="flex flex-col md:flex-row justify-between items-start md:items-center p-5 bg-rose-50/50 rounded-2xl border border-rose-100 gap-4 group hover:bg-rose-50 transition-colors">
+                      <div className="flex-1">
+                        <h4 className="font-bold text-slate-800 uppercase tracking-tight">{item.name}</h4>
+                        <div className="flex items-center gap-3 mt-1">
+                          <span className="text-[10px] font-bold text-rose-500 bg-white px-2 py-0.5 rounded border border-rose-100 shadow-sm">STOCK BAJO</span>
+                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">#{item.sku}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6 w-full md:w-auto">
+                        <div className="text-center md:text-right">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase">Actual</p>
+                          <p className="text-xl font-black text-rose-600 leading-none">{item.quantity}</p>
+                        </div>
+                        <div className="text-center md:text-right border-l border-rose-200 pl-6">
+                          <p className="text-[9px] font-bold text-slate-400 uppercase">Mínimo</p>
+                          <p className="text-xl font-black text-slate-400 leading-none">{item.minStock}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
+            </div>
 
-              <div className="p-4 md:p-6 bg-blue-50 rounded-2xl border border-blue-100">
-                <h4 className="text-[10px] font-bold text-blue-700 uppercase mb-3 tracking-widest">Estructura requerida (CSV):</h4>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[9px] font-bold text-center text-white">
-                  <div className="bg-blue-500 p-2 rounded">CANTIDAD</div>
-                  <div className="bg-blue-500 p-2 rounded">ACTIVO FIJO</div>
-                  <div className="bg-blue-500 p-2 rounded">LUGAR</div>
-                  <div className="bg-blue-500 p-2 rounded">RESPONSABLE</div>
+            <div className="max-w-2xl bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100">
+              <h3 className="text-lg font-bold text-slate-800 mb-6">Origen de Datos (Hoja 2)</h3>
+              <div className="space-y-6">
+                <div>
+                  <label className="block text-xs md:text-sm font-bold text-slate-700 mb-2 uppercase tracking-wide">URL de Google Sheets</label>
+                  <input
+                    type="url"
+                    value={sourceLink}
+                    onChange={(e) => setSourceLink(e.target.value)}
+                    placeholder="Pegar enlace de la Hoja 2 aquí..."
+                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                  />
                 </div>
-                <p className="text-[11px] text-blue-600 mt-4 leading-relaxed italic">
-                  * El archivo debe estar compartido públicamente para lectura.
-                </p>
-              </div>
 
-              <button 
-                onClick={syncWithGoogleSheets}
-                disabled={isSyncing || !sourceLink}
-                className="w-full bg-blue-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-blue-700 transition-all disabled:opacity-50 text-sm"
-              >
-                {isSyncing ? 'Conectando...' : 'Cargar Inventario'}
-              </button>
+                {syncStatus.type && (
+                  <div className={`p-4 rounded-xl border flex items-center gap-3 animate-fade-in text-sm font-medium ${syncStatus.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-700' : 'bg-rose-50 border-rose-100 text-rose-700'}`}>
+                    {syncStatus.message}
+                  </div>
+                )}
+
+                <div className="p-4 md:p-6 bg-blue-50 rounded-2xl border border-blue-100">
+                  <h4 className="text-[10px] font-bold text-blue-700 uppercase mb-3 tracking-widest">Estructura requerida (Hoja 2 / CSV):</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[9px] font-bold text-center text-white">
+                    <div className="bg-blue-500 p-2 rounded">CANTIDAD</div>
+                    <div className="bg-blue-500 p-2 rounded">NOMBRE</div>
+                    <div className="bg-blue-500 p-2 rounded">LUGAR</div>
+                    <div className="bg-blue-500 p-2 rounded">ENCARGADO</div>
+                    <div className="bg-rose-500 p-2 rounded">S. MINIMO</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -435,12 +494,16 @@ const App: React.FC = () => {
           <button
             key={item.id}
             onClick={() => setActiveSection(item.id)}
-            className={`flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}
+            className={`group relative overflow-hidden flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}
           >
-            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''}`}>
+            <ShineEffect />
+            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''} relative z-10`}>
               {item.icon}
             </div>
-            <span className="text-[10px] font-bold">{item.label}</span>
+            <span className="text-[10px] font-bold relative z-10">{item.label}</span>
+            {item.id === AppSection.ORDER && lowStockItems.length > 0 && (
+              <span className="absolute top-1 right-2 w-2 h-2 bg-rose-500 rounded-full animate-ping"></span>
+            )}
           </button>
         ))}
       </nav>

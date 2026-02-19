@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import ReactDOM from 'react-dom/client';
-import { GoogleGenAI } from "@google/genai";
 import { initializeApp } from "firebase/app";
 import { 
   getDatabase, 
@@ -34,11 +33,12 @@ interface Product {
   category: string;
   quantity: number;
   location: string;
-  arrivalDate: string;
+  arrivalDate: string; 
   responsible: string;
   sku: string;
   link: string; 
   imageUrl?: string; 
+  minStock: number; 
 }
 
 interface DeliveryRecord {
@@ -66,18 +66,12 @@ interface FinalizedRequest {
   items: { producto: string; cantidad: number }[];
 }
 
-interface ChatMessage {
-  role: 'user' | 'ai' | 'system';
-  text: string;
-  timestamp: Date;
-}
-
 enum AppSection {
   DASHBOARD = 'DASHBOARD',
   QUERY = 'QUERY',
   SOLICITUD = 'SOLICITUD',
   ENTREGA = 'ENTREGA',
-  SETTINGS = 'SETTINGS'
+  ORDER = 'ORDER' 
 }
 
 // --- 2. CONSTANTES E ICONOS ---
@@ -86,12 +80,18 @@ const DELIVERY_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWO
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9R2ocvOKfUpf78kVjZxG9EL5tbGxqtvu2Y-YeM7ADGbA41JdHdJ0GRmCJ3Qh8-LY/exec';
 
 const CustomLogo = ({ trigger }: { trigger: any }) => (
-  <div className="relative">
+  <div className="group relative overflow-hidden rounded-none p-1 transition-all duration-500 hover:bg-white/10 flex items-center justify-center shrink-0">
+    <ShineEffect />
     <img 
       key={trigger}
-      src="https://yt3.ggpht.com/a-/AAuE7mAOAi4DgYrnVswYDrVeyBYZX0RPcjLf2EC6mw=s900-mo-c-c0xffffffff-rj-k-no" 
-      alt="Logo Inventario"
-      className="relative w-12 h-12 md:w-14 md:h-14 rounded-lg object-cover transform transition-transform duration-500 hover:scale-105 animate-rotate border-none outline-none shadow-none"
+      src="https://instituto-ohiggins.cl/wp-content/uploads/2021/04/logo-maristas-rancagua.png" 
+      alt="Logo Maristas Rancagua"
+      referrerPolicy="no-referrer"
+      className="relative w-12 h-12 md:w-14 md:h-14 object-contain transform transition-transform duration-500 hover:scale-105 animate-rotate border-none outline-none shadow-none bg-transparent"
+      onError={(e) => {
+        // Fallback en caso de que la imagen institucional falle
+        e.currentTarget.src = "https://yt3.ggpht.com/a-/AAuE7mAOAi4DgYrnVswYDrVeyBYZX0RPcjLf2EC6mw=s900-mo-c-c0xffffffff-rj-k-no";
+      }}
     />
   </div>
 );
@@ -107,7 +107,8 @@ const ICONS = {
   Check: () => <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>,
   Plus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>,
   Minus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" /></svg>,
-  ChevronDown: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+  ChevronDown: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>,
+  ShoppingBag: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
 };
 
 // --- Shine Effect Component ---
@@ -163,36 +164,77 @@ const formatImageUrl = (url: string) => {
   return url;
 };
 
-// --- 4. COMPONENTES VISUALES ---
+// --- Maristas Decoration Component ---
+const MaristasBackground = () => (
+  <div className="fixed inset-0 -z-20 pointer-events-none overflow-hidden bg-[#f0f2f5]">
+    <div className="h-[120px] md:h-[160px] bg-[#2e7d32] w-full relative">
+      <div className="absolute top-[30%] left-0 w-full h-[200px]">
+        <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 1000 100">
+          <defs>
+            <filter id="fabricShine" x="-10%" y="-10%" width="120%" height="120%">
+              <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur" />
+              <feSpecularLighting in="blur" surfaceScale="5" specularConstant="1.2" specularExponent="40" lightingColor="#ffffff" result="specOut">
+                <fePointLight x="-1000" y="-1000" z="400" />
+              </feSpecularLighting>
+              <feComposite in="specOut" in2="SourceAlpha" operator="in" result="specOut" />
+              <feComposite in="SourceGraphic" in2="specOut" operator="arithmetic" k1="0" k2="1" k3="1" k4="0" />
+            </filter>
+            <pattern id="clothWeave" x="0" y="0" width="3" height="3" patternUnits="userSpaceOnUse">
+              <path d="M0,0 L3,3 M3,0 L0,3" stroke="#ffffff" strokeWidth="0.25" opacity="0.12" />
+            </pattern>
+            <linearGradient id="rBlue" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#0d47a1"/><stop offset="50%" stopColor="#1976d2"/><stop offset="100%" stopColor="#0d47a1"/></linearGradient>
+            <linearGradient id="rCyan" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#006064"/><stop offset="50%" stopColor="#00bcd4"/><stop offset="100%" stopColor="#006064"/></linearGradient>
+            <linearGradient id="rOrange" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#e65100"/><stop offset="50%" stopColor="#ff9800"/><stop offset="100%" stopColor="#e65100"/></linearGradient>
+            <linearGradient id="rYellow" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#f57f17"/><stop offset="50%" stopColor="#ffeb3b"/><stop offset="100%" stopColor="#f57f17"/></linearGradient>
+            <linearGradient id="rLime" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#33691e"/><stop offset="50%" stopColor="#8bc34a"/><stop offset="100%" stopColor="#33691e"/></linearGradient>
+            <linearGradient id="rRed" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stopColor="#b71c1c"/><stop offset="50%" stopColor="#f44336"/><stop offset="100%" stopColor="#b71c1c"/></linearGradient>
+          </defs>
+          {[
+            { color: 'url(#rBlue)', width: 14, dur: '100s', offset: 0 },
+            { color: 'url(#rCyan)', width: 12, dur: '140s', offset: 20 },
+            { color: 'url(#rOrange)', width: 15, dur: '120s', offset: -15 },
+            { color: 'url(#rYellow)', width: 13, dur: '160s', offset: 10 },
+            { color: 'url(#rLime)', width: 11, dur: '130s', offset: -25 },
+            { color: 'url(#rRed)', width: 16, dur: '110s', offset: 5 },
+          ].map((r, i) => (
+            <g key={i}>
+              <path fill="none" stroke={r.color} strokeWidth={r.width} strokeLinecap="round" filter="url(#fabricShine)">
+                <animate attributeName="d" dur={r.dur} repeatCount="indefinite" values={`M-100,${50+r.offset} Q125,${10+r.offset} 250,${50+r.offset} T500,${50+r.offset} T750,${50+r.offset} T1100,${50+r.offset};M-100,${50+r.offset} Q125,${90+r.offset} 250,${50+r.offset} T500,${50+r.offset} T750,${50+r.offset} T1100,${50+r.offset};M-100,${50+r.offset} Q125,${10+r.offset} 250,${50+r.offset} T500,${50+r.offset} T750,${50+r.offset} T1100,${50+r.offset}`} />
+              </path>
+              <path fill="none" stroke="url(#clothWeave)" strokeWidth={r.width} strokeLinecap="round">
+                <animate attributeName="d" dur={r.dur} repeatCount="indefinite" values={`M-100,${50+r.offset} Q125,${10+r.offset} 250,${50+r.offset} T500,${50+r.offset} T750,${50+r.offset} T1100,${50+r.offset};M-100,${50+r.offset} Q125,${90+r.offset} 250,${50+r.offset} T500,${50+r.offset} T750,${50+r.offset} T1100,${50+r.offset};M-100,${50+r.offset} Q125,${10+r.offset} 250,${50+r.offset} T500,${50+r.offset} T750,${50+r.offset} T1100,${50+r.offset}`} />
+              </path>
+            </g>
+          ))}
+        </svg>
+      </div>
+    </div>
+  </div>
+);
 
+// --- 4. COMPONENTES VISUALES ---
 interface SectionBreakdown {
   name: string;
   quantity: number;
   percent: number;
 }
-
 interface ProductStat {
   name: string;
   total: number;
   sections: SectionBreakdown[];
 }
-
 const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: string }> = ({ data, globalTotal, title }) => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
-  
   const localSum = data.reduce((sum, item) => sum + item.total, 0);
   const displayTotal = globalTotal || localSum;
-  
   const colors = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
   const radiusX = 140;
   const radiusY = 75;
   const depth = 22;
   const centerX = 160;
   const centerY = 110;
-
   if (localSum === 0) return null;
-
   let angleSum = 0;
   const slices = data.map((item, i) => {
     const sliceAngle = (item.total / localSum) * 2 * Math.PI;
@@ -202,11 +244,9 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
     const midAngle = startAngle + (sliceAngle / 2);
     return { item, i, startAngle, endAngle, midAngle, sliceAngle };
   });
-
   const sortedSlices = [...slices].sort((a, b) => Math.sin(a.midAngle) - Math.sin(b.midAngle));
-
   return (
-    <div className="bg-white p-6 md:p-12 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100/60 mb-8 overflow-hidden backdrop-blur-sm">
+    <div className="bg-white/95 backdrop-blur-sm p-6 md:p-12 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-200/60 mb-8 overflow-hidden">
       <h3 className="text-xs font-black text-slate-800 mb-10 uppercase tracking-widest flex items-center gap-3">
         <div className="w-2 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full shadow-lg shadow-blue-200"></div>
         {title || "Estadísticas"}
@@ -220,126 +260,46 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
               const explodeOffset = isHighlighted ? 45 : 0;
               const ox = explodeOffset * Math.cos(midAngle);
               const oy = explodeOffset * Math.sin(midAngle);
-
               const x1 = centerX + radiusX * Math.cos(startAngle);
               const y1 = centerY + radiusY * Math.sin(startAngle);
               const x2 = centerX + radiusX * Math.cos(endAngle);
               const y2 = centerY + radiusY * Math.sin(endAngle);
-
               const largeArcFlag = sliceAngle > Math.PI ? 1 : 0;
-
               return (
-                <g 
-                  key={`slice-group-${i}`}
-                  style={{ 
-                    transform: `translate(${ox}px, ${oy}px)`, 
-                    transition: 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' 
-                  }}
-                >
-                  <path
-                    d={`
-                      M ${x1} ${y1} 
-                      L ${x1} ${y1 + depth} 
-                      A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2 + depth}
-                      L ${x2} ${y2}
-                      A ${radiusX} ${radiusY} 0 ${largeArcFlag} 0 ${x1} ${y1}
-                    `}
-                    fill={colors[i % colors.length]}
-                    filter="brightness(0.75)"
-                  />
-                  <path
-                    d={`
-                      M ${centerX} ${centerY}
-                      L ${x1} ${y1}
-                      L ${x1} ${y1 + depth}
-                      L ${centerX} ${centerY + depth}
-                      Z
-                    `}
-                    fill={colors[i % colors.length]}
-                    filter="brightness(0.55)"
-                  />
-                  <path
-                    d={`
-                      M ${centerX} ${centerY}
-                      L ${x2} ${y2}
-                      L ${x2} ${y2 + depth}
-                      L ${centerX} ${centerY + depth}
-                      Z
-                    `}
-                    fill={colors[i % colors.length]}
-                    filter="brightness(0.88)"
-                  />
-                  <path
-                    d={`
-                      M ${centerX} ${centerY} 
-                      L ${x1} ${y1} 
-                      A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2} 
-                      Z
-                    `}
-                    fill={colors[i % colors.length]}
-                    stroke="rgba(255,255,255,0.3)"
-                    strokeWidth="1"
-                  />
+                <g key={`slice-group-${i}`} style={{ transform: `translate(${ox}px, ${oy}px)`, transition: 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' }}>
+                  <path d={`M ${x1} ${y1} L ${x1} ${y1 + depth} A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2 + depth} L ${x2} ${y2} A ${radiusX} ${radiusY} 0 ${largeArcFlag} 0 ${x1} ${y1}`} fill={colors[i % colors.length]} filter="brightness(0.75)" />
+                  <path d={`M ${centerX} ${centerY} L ${x1} ${y1} L ${x1} ${y1 + depth} L ${centerX} ${centerY + depth} Z`} fill={colors[i % colors.length]} filter="brightness(0.55)" />
+                  <path d={`M ${centerX} ${centerY} L ${x2} ${y2} L ${x2} ${y2 + depth} L ${centerX} ${centerY + depth} Z`} fill={colors[i % colors.length]} filter="brightness(0.88)" />
+                  <path d={`M ${centerX} ${centerY} L ${x1} ${y1} A ${radiusX} ${radiusY} 0 ${largeArcFlag} 1 ${x2} ${y2} Z`} fill={colors[i % colors.length]} stroke="rgba(255,255,255,0.3)" strokeWidth="1" />
                 </g>
               );
             })}
           </svg>
         </div>
-
         <div className="flex-1 w-full space-y-3">
           {data.map((item, i) => (
-            <div 
-              key={`legend-${i}`} 
-              className="group transition-all"
-              onMouseEnter={() => setHighlightedIndex(i)}
-              onMouseLeave={() => setHighlightedIndex(null)}
-            >
-              <button 
-                onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 transform ${expandedIndex === i ? 'bg-blue-50/80 shadow-[0_4px_12px_rgba(37,99,235,0.08)] ring-1 ring-blue-100 scale-[1.01]' : 'hover:bg-slate-50 hover:translate-x-1'}`}
-              >
+            <div key={`legend-${i}`} className="group transition-all" onMouseEnter={() => setHighlightedIndex(i)} onMouseLeave={() => setHighlightedIndex(null)}>
+              <button onClick={() => setExpandedIndex(expandedIndex === i ? null : i)} className="w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 transform">
                 <div className="flex items-center gap-4">
                   <div className="w-4 h-4 rounded-full shadow-inner border-2 border-white/50" style={{ backgroundColor: colors[i % colors.length] }}></div>
-                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px] text-left">
-                    {item.name}
-                  </span>
+                  <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px] text-left">{item.name}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100 group-hover:text-blue-600">
-                    {Math.round((item.total / displayTotal) * 100)}%
-                  </span>
-                  <span className="text-[11px] font-black text-blue-600 w-8 text-right">
-                    {item.total}
-                  </span>
-                  <div className={`transition-transform duration-500 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}>
-                    <ICONS.ChevronDown />
-                  </div>
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100 group-hover:text-blue-600">{Math.round((item.total / displayTotal) * 100)}%</span>
+                  <span className="text-[11px] font-black text-blue-600 w-8 text-right">{item.total}</span>
+                  <div className={`transition-transform duration-500 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}><ICONS.ChevronDown /></div>
                 </div>
               </button>
-              
               <div className={`overflow-hidden transition-all duration-500 ease-in-out ${expandedIndex === i ? 'max-h-[300px] opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
                 <div className="ml-8 px-5 py-4 bg-white/50 backdrop-blur-md border border-blue-50/50 rounded-2xl shadow-inner overflow-hidden">
-                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-50/50 pb-2 flex justify-between">
-                    <span>Desglose</span>
-                    <span>Cant. / %</span>
-                  </div>
+                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-50/50 pb-2 flex justify-between"><span>Desglose</span><span>Cant. / %</span></div>
                   <div className="space-y-2">
                     {item.sections.map((sec, j) => (
-                      <div 
-                        key={`sec-${j}`} 
-                        className="flex justify-between items-center group/item hover:bg-blue-50/40 rounded px-2 py-1 transition-colors cursor-default"
-                        onMouseEnter={() => setHighlightedIndex(i)}
-                      >
-                        <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">
-                          {sec.name}
-                        </span>
+                      <div key={`sec-${j}`} className="flex justify-between items-center group/item hover:bg-blue-50/40 rounded px-2 py-1 transition-colors cursor-default" onMouseEnter={() => setHighlightedIndex(i)}>
+                        <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">{sec.name}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded shadow-sm">
-                            {sec.quantity}
-                          </span>
-                          <span className="text-[9px] font-bold text-slate-400">
-                            {sec.percent}%
-                          </span>
+                          <span className="text-[10px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded shadow-sm">{sec.quantity}</span>
+                          <span className="text-[9px] font-bold text-slate-400">{sec.percent}%</span>
                         </div>
                       </div>
                     ))}
@@ -359,14 +319,10 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const trimmedQuery = query.trim();
     if (trimmedQuery.length > 0) {
-      const filtered = products.filter(p => 
-        p.name.toLowerCase().includes(trimmedQuery.toLowerCase()) || 
-        (p.sku && p.sku.toLowerCase().includes(trimmedQuery.toLowerCase()))
-      );
+      const filtered = products.filter(p => p.name.toLowerCase().includes(trimmedQuery.toLowerCase()) || (p.sku && p.sku.toLowerCase().includes(trimmedQuery.toLowerCase())));
       setSuggestions(filtered.slice(0, 10));
       setIsOpen(true);
     } else {
@@ -374,7 +330,6 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
       setIsOpen(false);
     }
   }, [query, products]);
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
@@ -384,18 +339,10 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
   return (
     <div className="relative w-full" ref={containerRef}>
       <div className="relative group">
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => query.trim().length > 0 && setIsOpen(true)}
-          placeholder={placeholder || "¿Qué producto buscas?"}
-          className="w-full px-4 py-3 md:px-5 md:py-3.5 pl-12 bg-slate-50/50 border border-slate-200/60 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight"
-        />
+        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => query.trim().length > 0 && setIsOpen(true)} placeholder={placeholder || "¿Qué producto buscas?"} className="w-full px-4 py-3 md:px-5 md:py-3.5 pl-12 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight" />
         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-blue-500"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
       </div>
       {isOpen && suggestions.length > 0 && (
@@ -405,22 +352,12 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
               <div className="flex items-center gap-4 flex-1 pr-3 truncate">
                 {p.imageUrl && (
                   <div className="relative shrink-0 overflow-hidden rounded-lg shadow-sm border border-slate-100">
-                    <img 
-                      src={formatImageUrl(p.imageUrl)} 
-                      alt={p.name} 
-                      className="w-11 h-11 object-cover transform transition-transform duration-500 group-hover:scale-110"
-                      onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')}
-                    />
+                    <img src={formatImageUrl(p.imageUrl)} alt={p.name} className="w-11 h-11 object-cover transform transition-transform duration-500 group-hover:scale-110" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} />
                   </div>
                 )}
-                <div className="min-w-0">
-                  <p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p>
-                </div>
+                <div className="min-w-0"><p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p></div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-[10px] font-black text-blue-600 bg-blue-100/50 px-3 py-1.5 rounded-lg shadow-sm shrink-0">STOCK: {p.quantity}</span>
-                <div className="bg-blue-600 text-white p-2 rounded-xl shadow-md group-hover:rotate-90 transition-transform duration-300"><ICONS.Plus /></div>
-              </div>
+              <div className="flex items-center gap-3 shrink-0"><span className="text-[10px] font-black text-blue-600 bg-blue-100/50 px-3 py-1.5 rounded-lg shadow-sm shrink-0">STOCK: {p.quantity}</span><div className="bg-blue-600 text-white p-2 rounded-xl shadow-md group-hover:rotate-90 transition-transform duration-300"><ICONS.Plus /></div></div>
             </li>
           ))}
         </ul>
@@ -432,126 +369,72 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
 // --- 5. APLICACIÓN PRINCIPAL ---
 const App: React.FC = () => {
   const [activeSection, setActiveSection] = useState<AppSection>(AppSection.DASHBOARD);
-  
   const [inventory, setInventory] = useState<Product[]>(() => {
     const saved = localStorage.getItem('inv_v4_final');
     return saved ? JSON.parse(saved) : [];
   });
   const [sourceLink, setSourceLink] = useState(() => localStorage.getItem('inv_link_v4_final') || DEFAULT_SHEET_URL);
-  
   const [deliveryData, setDeliveryData] = useState<DeliveryRecord[]>(() => {
     const saved = localStorage.getItem('del_v4_final');
     return saved ? JSON.parse(saved) : [];
   });
-  const [deliveryFilters, setDeliveryFilters] = useState({
-    seccion: '', departamento: '', fechaInicio: '', fechaFin: ''
-  });
-
+  const [deliveryFilters, setDeliveryFilters] = useState({ seccion: '', departamento: '', fechaInicio: '', fechaFin: '' });
   const [solicitudStep, setSolicitudStep] = useState<'crear' | 'cerrar'>('crear');
   const [solicitudFilters, setSolicitudFilters] = useState(() => {
     const saved = localStorage.getItem('solicitud_filters_v14');
     return saved ? JSON.parse(saved) : { departamento: '', seccion: '' };
   });
   const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
-  
   const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>([]);
-
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
-
   useEffect(() => { localStorage.setItem('inv_v4_final', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { localStorage.setItem('inv_link_v4_final', sourceLink); }, [sourceLink]);
   useEffect(() => { localStorage.setItem('del_v4_final', JSON.stringify(deliveryData)); }, [deliveryData]);
   useEffect(() => { localStorage.setItem('solicitud_filters_v14', JSON.stringify(solicitudFilters)); }, [solicitudFilters]);
-
   useEffect(() => {
     const itemsRef = ref(db, "pedidos_temporales");
     const unsubscribeItems = onValue(itemsRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const itemsList: OrderItem[] = Object.keys(data).map(key => ({
-          id: key,
-          producto: data[key].producto,
-          cantidad: data[key].cantidad,
-          departamento: data[key].departamento,
-          seccion: data[key].seccion
-        }));
+        const itemsList: OrderItem[] = Object.keys(data).map(key => ({ id: key, producto: data[key].producto, cantidad: data[key].cantidad, departamento: data[key].departamento, seccion: data[key].seccion }));
         setCurrentOrderItems(itemsList);
-      } else {
-        setCurrentOrderItems([]);
-      }
+      } else { setCurrentOrderItems([]); }
     });
-
     const finalizedRef = ref(db, "solicitudes_finalizadas");
     const unsubscribeFinalized = onValue(finalizedRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        const list: FinalizedRequest[] = Object.keys(data).map(key => ({
-          id: key,
-          ...data[key]
-        }));
+        const list: FinalizedRequest[] = Object.keys(data).map(key => ({ id: key, ...data[key] }));
         setFinalizedRequests(list);
-      } else {
-        setFinalizedRequests([]);
-      }
+      } else { setFinalizedRequests([]); }
     });
-    
-    return () => {
-      unsubscribeItems();
-      unsubscribeFinalized();
-    };
+    return () => { unsubscribeItems(); unsubscribeFinalized(); };
   }, []);
-
   const deliveryStats = useMemo(() => {
     const productDataMap: Record<string, { total: number, sections: Record<string, number> }> = {};
     let globalTotal = 0;
-    
     deliveryData.forEach(d => {
       const pName = d.producto?.trim();
       if (pName) {
         const qty = (d.cantidad || 0);
-        if (!productDataMap[pName]) {
-          productDataMap[pName] = { total: 0, sections: {} };
-        }
+        if (!productDataMap[pName]) { productDataMap[pName] = { total: 0, sections: {} }; }
         productDataMap[pName].total += qty;
         productDataMap[pName].sections[d.seccion] = (productDataMap[pName].sections[d.seccion] || 0) + qty;
         globalTotal += qty;
       }
     });
-
-    const top5 = Object.entries(productDataMap)
-      .sort(([, a], [, b]) => b.total - a.total)
-      .slice(0, 5)
-      .map(([name, data]) => ({ 
-        name, 
-        total: data.total,
-        sections: Object.entries(data.sections)
-          .map(([sec, q]) => ({
-            name: sec || 'N/A',
-            quantity: q,
-            percent: globalTotal > 0 ? Math.round((q / globalTotal) * 100) : 0 
-          }))
-          .sort((a,b) => b.quantity - a.quantity)
-      }));
-    
+    const top5 = Object.entries(productDataMap).sort(([, a], [, b]) => b.total - a.total).slice(0, 5).map(([name, data]) => ({ name, total: data.total, sections: Object.entries(data.sections).map(([sec, q]) => ({ name: sec || 'N/A', quantity: q, percent: globalTotal > 0 ? Math.round((q / globalTotal) * 100) : 0 })).sort((a,b) => b.quantity - a.quantity) }));
     return { top5, globalTotal };
   }, [deliveryData]);
-
   const syncData = async (type: 'inventory' | 'delivery' = 'inventory', silent = false) => {
     const link = type === 'inventory' ? sourceLink : DELIVERY_SHEET_URL;
     if (!link || !link.includes('docs.google.com/spreadsheets')) return;
     if (!silent) setIsSyncing(true);
     try {
       let url = link;
-      if (url.includes('/edit')) {
-        const baseUrl = url.split('/edit')[0];
-        const gidMatch = url.match(/[?#&]gid=([0-9]+)/);
-        const gid = gidMatch ? gidMatch[1] : '';
-        url = `${baseUrl}/export?format=csv${gid ? `&gid=${gid}` : ''}`;
-      } else if (!url.includes('/export')) {
-        url = url.replace(/\/$/, '') + '/export?format=csv';
-      }
-      
+      if (url.includes('/edit')) { const baseUrl = url.split('/edit')[0]; const gidMatch = url.match(/[?#&]gid=([0-9]+)/); const gid = gidMatch ? gidMatch[1] : ''; url = `${baseUrl}/export?format=csv${gid ? `&gid=${gid}` : ''}`; }
+      else if (!url.includes('/export')) { url = url.replace(/\/$/, '') + '/export?format=csv'; }
       const res = await fetch(url);
       const text = await res.text();
       if (text.includes('<html') || text.trim() === '') throw new Error("Hoja no pública");
@@ -559,479 +442,127 @@ const App: React.FC = () => {
       if (colsData.length < 2) throw new Error("Sin datos suficientes");
       const rows = colsData.slice(1);
       if (type === 'inventory') {
-        const newInv = rows.map((cols, i) => ({
-          id: `item-${i}-${Date.now()}`,
-          quantity: parseInt(cols[0]?.replace(/[^0-9]/g, '')) || 0,
-          name: cols[1] || 'Sin nombre',
-          sku: cols[1]?.substring(0, 10).toUpperCase() || 'S/N',
-          location: cols[2] || 'No especificado',
-          responsible: cols[3] || 'Sin asignar',
-          link: cols[4] || '', 
-          imageUrl: cols[5] || '', 
-          category: cols[6] || 'General',
-          arrivalDate: new Date().toISOString()
-        }));
+        const newInv = rows.map((cols, i) => ({ id: `item-${i}-${Date.now()}`, quantity: parseInt(cols[0]?.replace(/[^0-9]/g, '')) || 0, name: cols[1] || 'Sin nombre', sku: cols[1]?.substring(0, 10).toUpperCase() || 'S/N', location: cols[2] || 'No especificado', responsible: cols[3] || 'Sin asignar', minStock: parseInt(cols[4]?.replace(/[^0-9]/g, '')) || 0, link: cols[5] || '', imageUrl: cols[6] || '', category: cols[7] || 'General', arrivalDate: new Date().toISOString() }));
         setInventory(newInv);
       } else {
-        const newDel = rows.map((cols, i) => {
-          const isExtended = cols.length >= 6;
-          const fechaIdx = isExtended ? 5 : 4; 
-          const deptoIdx = isExtended ? 3 : 2;
-          const seccionIdx = isExtended ? 4 : 3;
-
-          return {
-            id: `del-${i}-${Date.now()}`,
-            cantidad: parseInt(cols[0]?.replace(/[^0-9]/g, '') || '0') || 0,
-            producto: cols[1]?.trim() || '',
-            seccion: cols[seccionIdx]?.trim() || '', 
-            departamento: cols[deptoIdx]?.trim() || '',
-            fecha: cols[fechaIdx]?.trim() || '' 
-          };
-        });
+        const newDel = rows.map((cols, i) => { const isExtended = cols.length >= 6; const fechaIdx = isExtended ? 5 : 4; const deptoIdx = isExtended ? 3 : 2; const seccionIdx = isExtended ? 4 : 3; return { id: `del-${i}-${Date.now()}`, cantidad: parseInt(cols[0]?.replace(/[^0-9]/g, '') || '0') || 0, producto: cols[1]?.trim() || '', seccion: cols[seccionIdx]?.trim() || '', departamento: cols[deptoIdx]?.trim() || '', fecha: cols[fechaIdx]?.trim() || '' }; });
         setDeliveryData(newDel);
       }
-    } catch (e: any) {
-      if (!silent) console.error(`Error Sincronización ${type}:`, e);
-    } finally {
-      if (!silent) setIsSyncing(false);
-    }
+    } catch (e: any) { if (!silent) console.error(`Error Sincronización ${type}:`, e); }
+    finally { if (!silent) setIsSyncing(false); }
   };
-
   useEffect(() => {
-    syncData('inventory', true);
-    syncData('delivery', true);
-    const syncInterval = setInterval(() => {
-      syncData('inventory', true);
-      syncData('delivery', true);
-    }, 30000);
-    const handleFocus = () => {
-      syncData('inventory', true);
-      syncData('delivery', true);
-    };
+    syncData('inventory', true); syncData('delivery', true);
+    const syncInterval = setInterval(() => { syncData('inventory', true); syncData('delivery', true); }, 30000);
+    const handleFocus = () => { syncData('inventory', true); syncData('delivery', true); };
     window.addEventListener('focus', handleFocus);
-    return () => {
-      clearInterval(syncInterval);
-      window.removeEventListener('focus', handleFocus);
-    };
+    return () => { clearInterval(syncInterval); window.removeEventListener('focus', handleFocus); };
   }, [sourceLink]);
-
-  const allPossibleDeptos = useMemo(() => {
-    const set = new Set<string>();
-    deliveryData.forEach(d => { if(d.departamento) set.add(d.departamento); });
-    return Array.from(set).filter(Boolean).sort();
-  }, [deliveryData]);
-
-  const allPossibleSecciones = useMemo(() => {
-    const set = new Set<string>();
-    deliveryData.forEach(d => { if(d.seccion) set.add(d.seccion); });
-    return Array.from(set).filter(Boolean).sort();
-  }, [deliveryData]);
-
-  const uniqueSeccionesHistory = allPossibleSecciones;
-  const uniqueDepartamentosHistory = allPossibleDeptos;
-
-  const filteredDelivery = useMemo(() => {
-    return deliveryData
-      .filter(d => {
-        const matchSeccion = !deliveryFilters.seccion || (d.seccion && d.seccion.toLowerCase().includes(deliveryFilters.seccion.toLowerCase()));
-        const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento;
-        const itemDate = getNormalizedTimestamp(d.fecha);
-        if (!itemDate) return matchSeccion && matchDepto;
-        const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio).getTime() : null;
-        const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin).getTime() : null;
-        return matchSeccion && matchDepto && (!start || itemDate >= start) && (!end || itemDate <= end);
-      })
-      .sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
-  }, [deliveryData, deliveryFilters]);
-
-  const isDeliveryFilterActive = useMemo(() => {
-    return !!(deliveryFilters.seccion.trim() || deliveryFilters.departamento || deliveryFilters.fechaInicio || deliveryFilters.fechaFin);
-  }, [deliveryFilters]);
-
-  const handleSolicitanteSeccionChange = (val: string) => {
-    const trimmedVal = val.trim();
-    setSolicitudFilters(prev => {
-      const newState = { ...prev, seccion: val };
-      if (trimmedVal !== '') {
-        const match = [...deliveryData].reverse().find(d => 
-          d.seccion && d.seccion.trim().toLowerCase() === trimmedVal.toLowerCase()
-        );
-        if (match) {
-          newState.departamento = match.departamento || prev.departamento;
-        }
-      }
-      return newState;
-    });
-  };
-
-  const clearTemporaryOrders = async () => {
-    try {
-      const itemsRef = ref(db, "pedidos_temporales");
-      await remove(itemsRef);
-    } catch (err) {
-      console.error("Error clearing orders:", err);
-    }
-  };
-
-  const loadPreviousOrder = async () => {
-    const seccionName = solicitudFilters.seccion.trim().toLowerCase();
-    if (!seccionName) return;
-    const seccionDeliveries = deliveryData.filter(d => d.seccion.trim().toLowerCase() === seccionName);
-    if (seccionDeliveries.length === 0) return;
-    const sorted = [...seccionDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0));
-    const latestDate = sorted[0].fecha;
-    const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate);
-    await clearTemporaryOrders();
-    const itemsRef = ref(db, "pedidos_temporales");
-    const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, {
-      producto: item.producto,
-      cantidad: item.cantidad,
-      departamento: solicitudFilters.departamento,
-      seccion: solicitudFilters.seccion
-    }));
-    await Promise.all(addPromises);
-  };
-
-  const addItemToOrder = async (p: Product) => {
-    const { departamento, seccion } = solicitudFilters;
-    try {
-      const existing = currentOrderItems.find(item => 
-        item.producto === p.name && 
-        item.seccion === seccion
-      );
-      if (existing && existing.id) {
-        const itemRef = ref(db, `pedidos_temporales/${existing.id}`);
-        await update(itemRef, { cantidad: existing.cantidad + 1 });
-      } else {
-        const itemsRef = ref(db, "pedidos_temporales");
-        await push(itemsRef, { producto: p.name, cantidad: 1, departamento, seccion });
-      }
-    } catch (err) {
-      console.error("Add item error:", err);
-    }
-  };
-
-  const updateItemQuantity = async (idx: number, delta: number) => {
-    try {
-      const item = currentOrderItems[idx];
-      if (!item || !item.id) return;
-      const newVal = item.cantidad + delta;
-      const itemRef = ref(db, `pedidos_temporales/${item.id}`);
-      if (newVal <= 0) { await remove(itemRef); }
-      else { await update(itemRef, { cantidad: newVal }); }
-    } catch (err) {
-      console.error("Update item error:", err);
-    }
-  };
-
-  const finalizarPedido = async (e: React.MouseEvent) => {
-    const { departamento, seccion } = solicitudFilters;
-    if (!departamento.trim() || !seccion.trim()) return;
-    const userItems = currentOrderItems.filter(i => i.seccion === seccion);
-    if (userItems.length === 0) return;
-    const fechaActual = new Date().toLocaleDateString('es-ES');
-    const newRequestData = {
-      departamento: departamento.trim(),
-      seccion: seccion.trim(),
-      fecha: fechaActual,
-      items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad }))
-    };
-    try {
-      const finalizedRef = ref(db, "solicitudes_finalizadas");
-      await push(finalizedRef, newRequestData);
-      for (const item of userItems) {
-        if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); }
-      }
-      setSolicitudFilters({ departamento: '', seccion: '' });
-      setSolicitudStep('cerrar');
-    } catch (err) {
-      console.error("Error al finalizar:", err);
-    }
-  };
-
-  const handleConfirmOk = async (req: FinalizedRequest) => {
-    try {
-      const dataToSend = { departamento: req.departamento, seccion: req.seccion, items: req.items };
-      await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) });
-      const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`);
-      await remove(reqRef);
-    } catch (e) {
-      console.error("Error procesando acción OK:", e);
-    }
-  };
-
-  const handleCancelRequest = async (reqId: string) => {
-    try {
-      const reqRef = ref(db, `solicitudes_finalizadas/${reqId}`);
-      await remove(reqRef);
-    } catch (e) {
-      console.error("Error cancelando pedido:", e);
-    }
-  };
-
-  const navItems = [
-    { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' },
-    { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' },
-    { id: AppSection.SOLICITUD, icon: <ICONS.Solicitud />, label: 'Solicitud' },
-    { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Historial' },
-    { id: AppSection.SETTINGS, icon: <ICONS.Settings />, label: 'Ajustes' },
-  ];
-
+  const lowStockItems = useMemo(() => { const filtered = inventory.filter(p => p.minStock > 0 && p.quantity <= p.minStock); const getWeight = (p: Product) => { if (p.quantity === 0) return 0; if (p.quantity < p.minStock) return 1; return 2; }; return filtered.sort((a, b) => getWeight(a) - getWeight(b)); }, [inventory]);
+  const allPossibleDeptos = useMemo(() => { const set = new Set<string>(); deliveryData.forEach(d => { if(d.departamento) set.add(d.departamento); }); return Array.from(set).filter(Boolean).sort(); }, [deliveryData]);
+  const allPossibleSecciones = useMemo(() => { const set = new Set<string>(); deliveryData.forEach(d => { if(d.seccion) set.add(d.seccion); }); return Array.from(set).filter(Boolean).sort(); }, [deliveryData]);
+  const filteredDelivery = useMemo(() => { return deliveryData.filter(d => { const matchSeccion = !deliveryFilters.seccion || (d.seccion && d.seccion.toLowerCase().includes(deliveryFilters.seccion.toLowerCase())); const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento; const itemDate = getNormalizedTimestamp(d.fecha); if (!itemDate) return matchSeccion && matchDepto; const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio).getTime() : null; const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin).getTime() : null; return matchSeccion && matchDepto && (!start || itemDate >= start) && (!end || itemDate <= end); }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); }, [deliveryData, deliveryFilters]);
+  const isDeliveryFilterActive = useMemo(() => { return !!(deliveryFilters.seccion.trim() || deliveryFilters.departamento || deliveryFilters.fechaInicio || deliveryFilters.fechaFin); }, [deliveryFilters]);
+  const handleSolicitanteSeccionChange = (val: string) => { const trimmedVal = val.trim(); setSolicitudFilters(prev => { const newState = { ...prev, seccion: val }; if (trimmedVal !== '') { const match = [...deliveryData].reverse().find(d => d.seccion && d.seccion.trim().toLowerCase() === trimmedVal.toLowerCase()); if (match) { newState.departamento = match.departamento || prev.departamento; } } return newState; }); };
+  const clearTemporaryOrders = async () => { try { const itemsRef = ref(db, "pedidos_temporales"); await remove(itemsRef); } catch (err) { console.error("Error clearing orders:", err); } };
+  const loadPreviousOrder = async () => { const seccionName = solicitudFilters.seccion.trim().toLowerCase(); if (!seccionName) return; const seccionDeliveries = deliveryData.filter(d => d.seccion.trim().toLowerCase() === seccionName); if (seccionDeliveries.length === 0) return; const sorted = [...seccionDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); const latestDate = sorted[0].fecha; const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate); await clearTemporaryOrders(); const itemsRef = ref(db, "pedidos_temporales"); const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, { producto: item.producto, cantidad: item.cantidad, departamento: solicitudFilters.departamento, seccion: solicitudFilters.seccion })); await Promise.all(addPromises); };
+  const addItemToOrder = async (p: Product) => { if (p.quantity <= 0) { alert("SIN STOCK"); return; } const { departamento, seccion } = solicitudFilters; try { const existing = currentOrderItems.find(item => item.producto === p.name && item.seccion === seccion); if (existing && existing.id) { const itemRef = ref(db, `pedidos_temporales/${existing.id}`); await update(itemRef, { cantidad: existing.cantidad + 1 }); } else { const itemsRef = ref(db, "pedidos_temporales"); await push(itemsRef, { producto: p.name, cantidad: 1, departamento, seccion }); } } catch (err) { console.error("Add item error:", err); } };
+  const updateItemQuantity = async (idx: number, delta: number) => { try { const item = currentOrderItems[idx]; if (!item || !item.id) return; if (delta > 0) { const productInInventory = inventory.find(p => p.name === item.producto); if (productInInventory && item.cantidad >= productInInventory.quantity) { alert("SIN STOCK"); return; } } const newVal = item.cantidad + delta; const itemRef = ref(db, `pedidos_temporales/${item.id}`); if (newVal <= 0) { await remove(itemRef); } else { await update(itemRef, { cantidad: newVal }); } } catch (err) { console.error("Update item error:", err); } };
+  const finalizarPedido = async (e: React.MouseEvent) => { const { departamento, seccion } = solicitudFilters; if (!departamento.trim() || !seccion.trim()) return; const userItems = currentOrderItems.filter(i => i.seccion === seccion); if (userItems.length === 0) return; const fechaActual = new Date().toLocaleDateString('es-ES'); const newRequestData = { departamento: departamento.trim(), seccion: seccion.trim(), fecha: fechaActual, items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad })) }; try { const finalizedRef = ref(db, "solicitudes_finalizadas"); await push(finalizedRef, newRequestData); for (const item of userItems) { if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); } } setSolicitudFilters({ departamento: '', seccion: '' }); setSolicitudStep('cerrar'); } catch (err) { console.error("Error al finalizar:", err); } };
+  const handleConfirmOk = async (req: FinalizedRequest) => { try { const dataToSend = { departamento: req.departamento, seccion: req.seccion, items: req.items }; await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) }); const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`); await remove(reqRef); } catch (e) { console.error("Error procesando acción OK:", e); } };
+  const handleCancelRequest = async (reqId: string) => { try { const reqRef = ref(db, `solicitudes_finalizadas/${reqId}`); await remove(reqRef); } catch (e) { console.error("Error cancelando pedido:", e); } };
+  const navItems = [ { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' }, { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' }, { id: AppSection.SOLICITUD, icon: <ICONS.Solicitud />, label: 'Solicitud' }, { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Historial' }, { id: AppSection.ORDER, icon: <ICONS.ShoppingBag />, label: 'PEDIR' }, ];
   const hasSolicitudFilters = !!(solicitudFilters.seccion && solicitudFilters.departamento);
-
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#fbfcfd] pb-24 md:pb-0 font-['Plus_Jakarta_Sans'] selection:bg-blue-100 selection:text-blue-900">
-      <aside className="hidden md:flex w-72 bg-white/80 backdrop-blur-xl border-r border-slate-200/50 flex-col fixed h-full z-40 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
-        <div className="p-10 flex items-center gap-2">
+    <div className="min-h-screen flex flex-col md:flex-row bg-transparent pb-24 md:pb-0 font-['Plus_Jakarta_Sans'] selection:bg-blue-100 selection:text-blue-900">
+      <MaristasBackground />
+      <aside className="hidden md:flex w-72 bg-white/80 backdrop-blur-2xl border-r border-slate-200/50 flex-col fixed h-full z-40 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+        <div className="p-6 flex flex-row items-center gap-4 border-b border-slate-100">
           <CustomLogo trigger={activeSection} />
-          <div>
-            <h1 className="font-black text-lg text-slate-800 tracking-tighter leading-none uppercase">Stock<br/><span className="text-blue-600 text-sm tracking-widest">Bodega</span></h1>
+          <div className="text-left">
+            <h1 className="font-black text-xl text-slate-800 tracking-tighter leading-tight uppercase">Stock<br/><span className="text-blue-600 text-sm tracking-widest">Bodega</span></h1>
           </div>
         </div>
         <nav className="flex-1 px-6 space-y-2 mt-4">
           {navItems.map((item) => (
-            <button 
-              key={item.id} 
-              onClick={() => setActiveSection(item.id)} 
-              className={`group relative overflow-hidden w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 font-black text-xs uppercase tracking-widest ${activeSection === item.id ? 'bg-blue-600 text-white shadow-[0_10px_25px_rgba(37,99,235,0.3)] scale-[1.03]' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
-            >
-              <ShineEffect />
-              <div className="flex items-center gap-5 relative z-10">
-                <span className={`transition-transform duration-500 ${activeSection === item.id ? 'scale-110' : 'group-hover:scale-110'}`}>{item.icon}</span>
-                <span>{item.label}</span>
-              </div>
+            <button key={item.id} onClick={() => setActiveSection(item.id)} className={`group relative overflow-hidden w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 font-black text-xs uppercase tracking-widest ${activeSection === item.id ? 'bg-blue-600 text-white shadow-[0_10px_25px_rgba(37,99,235,0.3)] scale-[1.03]' : 'text-slate-400 hover:bg-white/80 hover:text-slate-800'}`}>
+              <ShineEffect /><div className="flex items-center gap-5 relative z-10"><span className={`transition-transform duration-500 ${activeSection === item.id ? 'scale-110' : 'group-hover:scale-110'}`}>{item.icon}</span><span>{item.label}</span></div>
               {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
-                <span className={`relative z-10 px-2 py-1 rounded-lg text-[9px] font-black leading-none flex items-center justify-center transition-colors ${activeSection === item.id ? 'bg-white text-blue-600' : 'bg-rose-500 text-white animate-pulse'}`}>
-                  {finalizedRequests.length}
-                </span>
+                <span className={`relative z-10 px-2 py-1 rounded-lg text-[9px] font-black leading-none flex items-center justify-center transition-colors ${activeSection === item.id ? 'bg-white text-blue-600' : 'bg-rose-500 text-white animate-pulse'}`}>{finalizedRequests.length}</span>
               )}
             </button>
           ))}
         </nav>
-        <div className="p-8 mt-auto">
-          <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100/50 text-center">
-             <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">Status Sistema</p>
-             <div className="flex items-center justify-center gap-2">
-               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div>
-               <span className="text-[9px] font-black text-emerald-600 uppercase">En Línea</span>
-             </div>
-          </div>
-        </div>
+        <div className="p-8 mt-auto"><div className="p-4 bg-white/50 backdrop-blur-xl rounded-2xl border border-white/50 text-center shadow-sm"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Sistema</p><div className="flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div><span className="text-[9px] font-black text-emerald-600 uppercase">En Línea</span></div></div></div>
       </aside>
-
-      <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full transition-all duration-700`}>
+      <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full transition-all duration-700 relative z-10`}>
         <header className="flex flex-col mb-4 md:mb-6">
           <div className="flex justify-between items-center mb-4">
             <div className="hidden md:block animate-fade-in w-full">
               <div className="flex justify-between items-start">
-                <h2 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tighter uppercase leading-none mb-2">
+                <h2 className="text-3xl md:text-4xl font-black text-white drop-shadow-lg tracking-tighter uppercase leading-none mb-2">
                   {activeSection === AppSection.DASHBOARD && 'Vista General'}
                   {activeSection === AppSection.QUERY && 'Consultas'}
-                  {activeSection === AppSection.SOLICITUD && (
-                    hasSolicitudFilters 
-                    ? `SOLICITUD ${solicitudFilters.departamento.toUpperCase()} ${solicitudFilters.seccion.toUpperCase()}`
-                    : 'SOLICITUD'
-                  )}
+                  {activeSection === AppSection.SOLICITUD && (hasSolicitudFilters ? `SOLICITUD ${solicitudFilters.departamento.toUpperCase()} ${solicitudFilters.seccion.toUpperCase()}` : 'SOLICITUD')}
                   {activeSection === AppSection.ENTREGA && 'Historial'}
-                  {activeSection === AppSection.SETTINGS && 'Configuración'}
+                  {activeSection === AppSection.ORDER && 'LISTA PRIORITARIA'}
                 </h2>
                 {activeSection === AppSection.SOLICITUD && hasSolicitudFilters && (
                   <div className="flex gap-2">
-                    <button 
-                      onClick={loadPreviousOrder} 
-                      className="text-blue-600 font-black text-[10px] uppercase tracking-widest bg-blue-50 px-4 py-2 rounded-xl transition-all hover:bg-blue-100 active:scale-95 border border-blue-100/50 flex items-center gap-2"
-                    >
-                      <ICONS.Delivery /> PEDIDO ANTERIOR
-                    </button>
-                    <button 
-                      onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} 
-                      className="text-rose-500 font-black text-[10px] uppercase hover:underline tracking-widest bg-rose-50 px-4 py-2 rounded-xl transition-all hover:bg-rose-100 active:scale-95 border border-rose-100/50 flex flex-col items-center justify-center leading-none"
-                    >
-                      <span>BORRAR</span>
-                      <span className="text-[7px] mt-0.5 opacity-60">FILTROS</span>
-                    </button>
+                    <button onClick={loadPreviousOrder} className="group relative overflow-hidden text-blue-600 font-black text-[10px] uppercase tracking-widest bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl transition-all hover:bg-white active:scale-95 border border-white/50 flex items-center gap-2 shadow-sm"><ShineEffect /><div className="relative z-10 flex items-center gap-2"><ICONS.Delivery /> PEDIDO ANTERIOR</div></button>
+                    <button onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} className="group relative overflow-hidden text-rose-500 font-black text-[10px] uppercase hover:underline tracking-widest bg-white/90 backdrop-blur-md px-4 py-2 rounded-xl transition-all hover:bg-white active:scale-95 border border-white/50 flex flex-col items-center justify-center leading-none shadow-sm"><ShineEffect /><div className="relative z-10 flex flex-col items-center"><span>BORRAR</span><span className="text-[7px] mt-0.5 opacity-60">FILTROS</span></div></button>
                   </div>
                 )}
               </div>
             </div>
-            <div className="md:hidden flex items-center gap-2"><CustomLogo trigger={activeSection} /><h1 className="font-black text-base text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-[10px] tracking-widest">Bodega</span></h1></div>
+            <div className="md:hidden flex items-center gap-2"><CustomLogo trigger={activeSection} /><h1 className="font-black text-base text-white tracking-tight leading-none uppercase drop-shadow-md">Stock<br/><span className="text-white/80 text-[10px] tracking-widest">Bodega</span></h1></div>
           </div>
         </header>
-
-        {activeSection === AppSection.DASHBOARD && (
-          <div className="space-y-6 animate-fade-in">
-            {deliveryStats.top5.length > 0 ? ( 
-              <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} title="Top 5 Productos Solicitados" /> 
-            ) : (
-              <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div>
-            )}
-          </div>
-        )}
-
-        {activeSection === AppSection.QUERY && (
-          <div className="animate-fade-in space-y-4 md:space-y-6">
-            <div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.03)] border border-slate-100/60 transition-all">
-               <AutocompleteSearch products={inventory} onSelect={setSelectedProduct} placeholder="Escribe el nombre del producto..." />
-            </div>
-            {selectedProduct && (
-              <div className="max-w-4xl mx-auto animate-fade-in">
-                <div className="bg-white rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.03)] border border-slate-100/80 p-5 md:p-8 overflow-hidden relative">
-                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600"></div>
-                   <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
-                     {selectedProduct.imageUrl && (
-                       <div className="shrink-0 relative">
-                        <div className="absolute -inset-4 bg-blue-100/30 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div>
-                        <img 
-                          src={formatImageUrl(selectedProduct.imageUrl)} 
-                          alt={selectedProduct.name} 
-                          className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]"
-                          onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')}
-                        />
-                       </div>
-                     )}
-                     <div className="flex-1 w-full">
-                        <div className="flex justify-between items-start w-full">
-                          <div className="flex-1 pr-4">
-                            <h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4>
-                          </div>
-                          <div className="shrink-0 text-right">
-                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p>
-                            <p className="text-sm font-black text-slate-700 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100 shadow-sm">#{selectedProduct.sku}</p>
-                          </div>
-                        </div>
-                        <div className="mt-4 flex items-center gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100/50">
-                           <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center font-black text-blue-600 text-lg">
-                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
-                           </div>
-                           <div className="flex flex-col">
-                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest opacity-60">Existencia en Bodega:</span>
-                             <span className="text-2xl font-black text-blue-600 leading-none mt-1">{selectedProduct.quantity}</span>
-                           </div>
-                        </div>
-                     </div>
-                   </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
+        {activeSection === AppSection.DASHBOARD && ( <div className="space-y-6 animate-fade-in">{deliveryStats.top5.length > 0 ? ( <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} title="Top 5 Productos Solicitados" /> ) : ( <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white/90 backdrop-blur-md border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div> )}</div> )}
+        {activeSection === AppSection.QUERY && ( <div className="animate-fade-in space-y-4 md:space-y-6"><div className="bg-white/95 backdrop-blur-md p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.04)] border border-slate-100 transition-all"><AutocompleteSearch products={inventory} onSelect={setSelectedProduct} placeholder="Escribe el nombre del producto..." /></div>{selectedProduct && ( <div className="max-w-4xl mx-auto animate-fade-in"><div className="bg-white/95 backdrop-blur-md rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 p-5 md:p-8 overflow-hidden relative"><div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#00732e] via-[#004894] to-[#00732e]"></div><div className="flex flex-col md:flex-row gap-6 items-center md:items-start">{selectedProduct.imageUrl && ( <div className="shrink-0 relative"><div className="absolute -inset-4 bg-[#00732e]/5 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div><img src={formatImageUrl(selectedProduct.imageUrl)} alt={selectedProduct.name} className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} /></div> )}<div className="flex-1 w-full"><div className="flex justify-between items-start w-full"><div className="flex-1 pr-4"><h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4></div><div className="shrink-0 text-right"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p><p className="text-sm font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 shadow-sm">#{selectedProduct.sku}</p></div></div><div className="mt-4 flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100"><div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center font-black text-[#1b5e20] text-lg border border-emerald-200"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div><div className="flex flex-col"><span className="text-[10px] font-black text-[#1b5e20] uppercase tracking-widest opacity-70">Existencia en Bodega:</span><span className="text-2xl font-black text-[#1b5e20] leading-none mt-1">{selectedProduct.quantity}</span></div></div></div></div></div></div> )}</div> )}
         {activeSection === AppSection.SOLICITUD && (
           <div className="animate-fade-in space-y-3 md:space-y-4 max-w-4xl mx-auto">
             {!hasSolicitudFilters && (
-              <div className="bg-white p-3 md:p-4 rounded-[32px] shadow-[0_15px_40px_rgba(0,0,0,0.02)] border border-slate-100/60 transition-all hover:shadow-[0_25px_50px_rgba(0,0,0,0.05)]">
-                 <div className="flex justify-between items-center mb-3 border-b border-slate-50 pb-2">
-                   <h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.2em] opacity-70">Identificación del Solicitante</h3>
-                   <button onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} className="text-rose-500 font-black text-[8px] uppercase hover:underline tracking-widest bg-rose-50 px-2 py-1 rounded-lg transition-colors hover:bg-rose-100">BORRAR</button>
-                 </div>
+              <div className="bg-white/95 backdrop-blur-md p-3 md:p-4 rounded-[32px] shadow-[0_15px_40px_rgba(0,0,0,0.03)] border border-slate-200 transition-all">
+                 <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2"><h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.2em] opacity-70">Identificación del Solicitante</h3><button onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} className="group relative overflow-hidden text-rose-500 font-black text-[8px] uppercase hover:underline tracking-widest bg-rose-50 px-2 py-1 rounded-lg transition-colors hover:bg-rose-100"><ShineEffect /><span className="relative z-10">BORRAR</span></button></div>
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1 group">
-                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección / Aula</label>
-                      <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => handleSolicitanteSeccionChange(e.target.value)} placeholder="" className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" />
-                      <datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
-                    </div>
-                    <div className="space-y-1 group">
-                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento</label>
-                      <input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" />
-                      <datalist id="deptos-list-smart">{allPossibleDeptos.map(d => <option key={d} value={d} />)}</datalist>
-                    </div>
+                    <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección / Aula</label><input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => handleSolicitanteSeccionChange(e.target.value)} placeholder="" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /><datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist></div>
+                    <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento</label><input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /><datalist id="deptos-list-smart">{allPossibleDeptos.map(d => <option key={d} value={d} />)}</datalist></div>
                  </div>
-                 {solicitudFilters.seccion.trim() !== '' && (
-                   <div className="mt-4 flex justify-center">
-                     <button onClick={loadPreviousOrder} className="group relative overflow-hidden bg-blue-50 text-blue-600 font-black px-6 py-2 rounded-xl text-[9px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all duration-500 border border-blue-100 shadow-sm flex items-center gap-2 active:scale-95">
-                       <ShineEffect />
-                       <div className="relative z-10 flex items-center gap-2"><ICONS.Delivery /> CARGAR ÚLTIMO PEDIDO</div>
-                     </button>
-                   </div>
-                 )}
               </div>
             )}
-
-            <div className="flex gap-2 p-1.5 bg-white/50 backdrop-blur rounded-xl border border-slate-100">
-              <button onClick={() => setSolicitudStep('crear')} className={`flex-1 relative overflow-hidden py-2 rounded-lg font-black text-[9px] uppercase tracking-[0.3em] transition-all duration-500 transform ${solicitudStep === 'crear' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-transparent text-slate-400 hover:bg-white/80 hover:text-slate-600'}`}>
-                <ShineEffect />
-                <span className="relative z-10">Nuevo Pedido</span>
-              </button>
-              <button onClick={() => setSolicitudStep('cerrar')} className={`flex-1 relative overflow-hidden py-2 rounded-lg font-black text-[9px] uppercase tracking-[0.3em] transition-all duration-500 transform ${solicitudStep === 'cerrar' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-transparent text-slate-400 hover:bg-white/80 hover:text-slate-600'}`}>
-                <ShineEffect />
-                <span className="relative z-10">Pedidos Listos</span>
-                {finalizedRequests.length > 0 && <span className="absolute top-0 right-2 bg-rose-500 text-white px-1.5 py-0.5 rounded-full text-[8px] shadow-sm animate-bounce z-20">{finalizedRequests.length}</span>}
-              </button>
+            <div className="flex gap-2 p-1.5 bg-white/80 backdrop-blur-xl rounded-xl border border-slate-200 shadow-sm">
+              <button onClick={() => setSolicitudStep('crear')} className={`flex-1 relative overflow-hidden py-2 rounded-lg font-black text-[9px] uppercase tracking-[0.3em] transition-all duration-500 transform ${solicitudStep === 'crear' ? 'bg-[#2e7d32] text-white shadow-lg shadow-emerald-200' : 'bg-transparent text-slate-400 hover:bg-white/80 hover:text-slate-600'}`}><ShineEffect /><span className="relative z-10">Nuevo Pedido</span></button>
+              <button onClick={() => setSolicitudStep('cerrar')} className={`flex-1 relative overflow-hidden py-2 rounded-lg font-black text-[9px] uppercase tracking-[0.3em] transition-all duration-500 transform ${solicitudStep === 'cerrar' ? 'bg-[#2e7d32] text-white shadow-lg shadow-emerald-200' : 'bg-transparent text-slate-400 hover:bg-white/80 hover:text-slate-600'}`}><ShineEffect /><span className="relative z-10">Pedidos Listos</span>{finalizedRequests.length > 0 && <span className="absolute top-0 right-2 bg-rose-500 text-white px-1.5 py-0.5 rounded-full text-[8px] shadow-sm animate-bounce z-20">{finalizedRequests.length}</span>}</button>
             </div>
-
             {solicitudStep === 'crear' && (
               <div className="space-y-4 animate-fade-in">
-                <div className="bg-white p-4 rounded-[28px] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
-                  <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-[0.2em] opacity-60">Añadir Activos</h4>
-                  <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe el nombre del producto..." />
-                </div>
+                <div className="bg-white/95 backdrop-blur-md p-4 rounded-[28px] border border-slate-200 shadow-sm"><h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-[0.2em] opacity-60">Añadir Activos</h4><AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe el nombre del producto..." /></div>
                 {currentOrderItems.filter(i => i.seccion === solicitudFilters.seccion).length > 0 && (
-                  <div className="bg-white rounded-[32px] border border-slate-100 shadow-xl overflow-hidden animate-fade-in transition-all">
-                    <div className="p-4 bg-slate-50/80 border-b flex justify-between items-center">
-                      <h4 className="font-black text-slate-800 text-[9px] uppercase tracking-[0.3em]">Lista Temporal de Carga</h4>
-                      <button onClick={clearTemporaryOrders} className="text-rose-500 font-black text-[8px] uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-rose-100 shadow-sm transition-all hover:bg-rose-500 hover:text-white">LIMPIAR TODO</button>
-                    </div>
-                    <div className="divide-y divide-slate-50">
+                  <div className="bg-white/95 backdrop-blur-md rounded-[32px] border border-slate-200 shadow-xl overflow-hidden animate-fade-in transition-all">
+                    <div className="p-4 bg-slate-100 border-b flex justify-between items-center"><h4 className="font-black text-slate-800 text-[9px] uppercase tracking-[0.3em]">Lista Temporal de Carga</h4><button onClick={clearTemporaryOrders} className="group relative overflow-hidden text-rose-500 font-black text-[8px] uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-rose-100 shadow-sm transition-all hover:bg-rose-500 hover:text-white"><ShineEffect /><span className="relative i-active:z-10">LIMPIAR TODO</span></button></div>
+                    <div className="divide-y divide-slate-100">
                       {currentOrderItems.filter(i => i.seccion === solicitudFilters.seccion).map((item, i) => (
-                        <div key={item.id || i} className="p-2 md:p-3 flex justify-between items-center group transition-colors hover:bg-slate-50/50">
-                          <div className="flex items-center gap-3">
-                            <div className="w-1 h-1 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                            <span className="font-black text-slate-800 text-xs uppercase tracking-tight">{item.producto}</span>
-                          </div>
-                          <div className="flex items-center gap-3">
-                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), -1)} className="bg-white p-1.5 rounded-lg border border-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-100 shadow-sm active:scale-90 transition-all"><ICONS.Minus /></button>
-                             <span className="bg-blue-600 text-white px-3 py-1 rounded-lg font-black text-xs w-10 text-center shadow-lg shadow-blue-100">{item.cantidad}</span>
-                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), 1)} className="bg-white p-1.5 rounded-lg border border-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-500 hover:border-blue-100 shadow-sm active:scale-90 transition-all"><ICONS.Plus /></button>
-                          </div>
+                        <div key={item.id || i} className="p-2 md:p-3 flex justify-between items-center group transition-colors hover:bg-slate-50">
+                          <div className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div><span className="font-black text-slate-800 text-xs uppercase tracking-tight">{item.producto}</span></div>
+                          <div className="flex items-center gap-3"><button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), -1)} className="bg-white p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-100 shadow-sm active:scale-90 transition-all"><ICONS.Minus /></button><span className="bg-[#2e7d32] text-white px-3 py-1 rounded-lg font-black text-xs w-10 text-center shadow-lg shadow-emerald-100">{item.cantidad}</span><button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), 1)} className="bg-white p-1.5 rounded-lg border border-slate-200 text-slate-400 hover:bg-blue-50 hover:text-blue-500 hover:border-blue-100 shadow-sm active:scale-90 transition-all"><ICONS.Plus /></button></div>
                         </div>
                       ))}
                     </div>
-                    <div className="p-4 bg-slate-50/80 border-t">
-                      <button onClick={(e) => finalizarPedido(e)} className="relative overflow-hidden group w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black py-4 rounded-[20px] text-[10px] uppercase tracking-[0.4em] shadow-2xl shadow-blue-200 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
-                        <ShineEffect />
-                        <span className="relative z-10 flex items-center gap-3">FINALIZAR PEDIDO <ICONS.Check /></span>
-                      </button>
-                    </div>
+                    <div className="p-4 bg-slate-100 border-t"><button onClick={(e) => finalizarPedido(e)} className="relative overflow-hidden group w-full bg-gradient-to-r from-[#2e7d32] to-[#1b5e20] hover:from-[#1b5e20] hover:to-[#0d3b10] text-white font-black py-4 rounded-[20px] text-[10px] uppercase tracking-[0.4em] shadow-2xl shadow-emerald-200 active:scale-[0.98] transition-all flex items-center justify-center gap-3"><ShineEffect /><span className="relative z-10 flex items-center gap-3">FINALIZAR PEDIDO <ICONS.Check /></span></button></div>
                   </div>
                 )}
               </div>
             )}
-
             {solicitudStep === 'cerrar' && (
               <div className="space-y-6 animate-fade-in">
-                {finalizedRequests.length === 0 ? (
-                  <div className="bg-white p-20 rounded-[48px] border border-slate-100/60 shadow-inner text-center flex flex-col items-center opacity-80">
-                    <div className="bg-slate-50 p-6 rounded-full mb-6 border border-slate-100 animate-pulse"><ICONS.Solicitud /></div>
-                    <p className="font-black text-slate-300 text-[10px] uppercase tracking-[0.3em]">No hay pedidos pendientes de entrega</p>
-                  </div>
-                ) : (
+                {finalizedRequests.length === 0 ? ( <div className="bg-white/95 backdrop-blur-md p-20 rounded-[48px] border border-slate-200 shadow-inner text-center flex flex-col items-center opacity-80"><div className="bg-slate-100 p-6 rounded-full mb-6 border border-slate-200 animate-pulse"><ICONS.Solicitud /></div><p className="font-black text-slate-400 text-[10px] uppercase tracking-[0.3em]">No hay pedidos pendientes de entrega</p></div> ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                     {finalizedRequests.map((req) => (
-                      <div key={req.id} className="group bg-white rounded-[40px] border border-slate-100 shadow-[0_15px_35px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col animate-fade-in transition-all duration-500 hover:shadow-[0_25px_50px_rgba(0,0,0,0.08)] hover:-translate-y-1">
-                        <div className="p-6 md:p-8 bg-blue-50/50 border-b border-slate-100/50 relative overflow-hidden">
-                          <div className="absolute top-0 left-0 w-full h-1 bg-blue-600"></div>
-                          <div className="flex justify-between items-center mb-4">
-                            <span className="bg-white px-3 py-1 rounded-lg font-black text-[9px] text-blue-600 uppercase tracking-widest shadow-sm border border-blue-50">#{req.id.split('-').pop()}</span>
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter bg-white/60 px-2 py-1 rounded-md">{req.fecha}</span>
-                          </div>
-                          <h4 className="font-black text-slate-800 text-lg md:text-xl uppercase leading-none tracking-tighter mb-1">{req.seccion}</h4>
-                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest opacity-80 truncate">{req.departamento}</p>
-                        </div>
-                        <div className="p-6 md:p-8 flex-1 space-y-3 bg-white">
-                          {req.items.map((item, idx) => ( 
-                            <div key={idx} className="flex justify-between items-center text-[11px] font-black border-b border-slate-50 pb-2 group/item">
-                              <span className="text-slate-600 uppercase truncate pr-4 transition-colors group-hover/item:text-slate-900">{item.producto}</span>
-                              <span className="text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg shadow-sm">x{item.cantidad}</span>
-                            </div> 
-                          ))}
-                        </div>
-                        <div className="p-6 md:p-8 bg-slate-50/50 border-t border-slate-100/50 flex gap-4">
-                          <button onClick={() => handleCancelRequest(req.id)} className="flex-1 bg-white text-rose-500 font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-sm hover:bg-rose-500 hover:text-white transition-all duration-300 border border-rose-100 active:scale-95">CANCELAR</button>
-                          <button onClick={() => handleConfirmOk(req)} className="relative overflow-hidden group flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all duration-300">
-                            <ShineEffect />
-                            <span className="relative z-10">OK</span>
-                          </button>
-                        </div>
+                      <div key={req.id} className="group bg-white/95 backdrop-blur-md rounded-[40px] border border-slate-200 shadow-[0_15px_35px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col animate-fade-in transition-all duration-500 hover:shadow-[0_25px_50px_rgba(0,0,0,0.08)] hover:-translate-y-1">
+                        <div className="p-6 md:p-8 bg-emerald-50 border-b border-slate-100 relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1.5 bg-[#2e7d32]"></div><div className="flex justify-between items-center mb-4"><span className="bg-white px-3 py-1 rounded-lg font-black text-[9px] text-[#2e7d32] uppercase tracking-widest shadow-sm border border-emerald-100">#{req.id.split('-').pop()}</span><span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter bg-white/80 px-2 py-1 rounded-md">{req.fecha}</span></div><h4 className="font-black text-slate-800 text-lg md:text-xl uppercase leading-none tracking-tighter mb-1">{req.seccion}</h4><p className="text-[10px] font-black text-[#2e7d32] uppercase tracking-widest opacity-80 truncate">{req.departamento}</p></div>
+                        <div className="p-6 md:p-8 flex-1 space-y-3 bg-white">{req.items.map((item, idx) => ( <div key={idx} className="flex justify-between items-center text-[11px] font-black border-b border-slate-50 pb-2 group/item"><span className="text-slate-600 uppercase truncate pr-4 transition-colors group-hover/item:text-slate-900">{item.producto}</span><span className="text-[#2e7d32] bg-emerald-50 px-2.5 py-1 rounded-lg shadow-sm">x{item.cantidad}</span></div> ))}</div>
+                        <div className="p-6 md:p-8 bg-slate-50 border-t border-slate-100 flex gap-4"><button onClick={() => handleCancelRequest(req.id)} className="group relative overflow-hidden flex-1 bg-white text-rose-500 font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-sm hover:bg-rose-500 hover:text-white transition-all duration-300 border border-rose-200 active:scale-95"><ShineEffect /><span className="relative z-10">CANCELAR</span></button><button onClick={() => handleConfirmOk(req)} className="relative overflow-hidden group flex-1 bg-[#2e7d32] text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-[#1b5e20] active:scale-95 transition-all duration-300"><ShineEffect /><span className="relative z-10">OK</span></button></div>
                       </div>
                     ))}
                   </div>
@@ -1040,102 +571,36 @@ const App: React.FC = () => {
             )}
           </div>
         )}
-
         {activeSection === AppSection.ENTREGA && (
           <div className="animate-fade-in space-y-6 md:space-y-8">
-            <div className="bg-white p-3 md:p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.02)] border border-slate-100/60 transition-all hover:shadow-[0_25px_50px_rgba(0,0,0,0.05)]">
-               <div className="flex justify-between items-center mb-3 border-b border-slate-50 pb-2">
-                 <h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.3em] opacity-70">Panel de Filtrado Avanzado</h3>
-               </div>
+            <div className="bg-white/95 backdrop-blur-md p-3 md:p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.03)] border border-slate-200 transition-all hover:shadow-[0_25px_50px_rgba(0,0,0,0.06)]">
+               <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2"><h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.3em] opacity-70">Panel de Filtrado Avanzado</h3></div>
                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1 group">
-                    <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección</label>
-                    <input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" />
-                    <datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
-                  </div>
-                  <div className="space-y-1 group">
-                    <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento Destino</label>
-                    <select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm">
-                      <option value="">TODOS LOS DEPTOS</option>
-                      {uniqueDepartamentosHistory.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
-                  </div>
+                  <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección</label><input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /><datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist></div>
+                  <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento Destino</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm"><option value="">TODOS LOS DEPTOS</option>{allPossibleDeptos.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
                   <div className="grid grid-cols-2 gap-4 md:col-span-2">
-                    <div className="space-y-1 group">
-                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Inicial</label>
-                      <input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" />
-                    </div>
-                    <div className="space-y-1 group">
-                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Límite</label>
-                      <input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" />
-                    </div>
+                    <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Inicial</label><input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
+                    <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Límite</label><input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
                   </div>
-                  <div className="md:col-span-2 pt-2">
-                    <button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: ''})} className="relative overflow-hidden group w-full py-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all hover:bg-rose-500 hover:text-white shadow-sm active:scale-[0.99]">
-                      <ShineEffect />
-                      <span className="relative z-10">REINICIAR FILTROS</span>
-                    </button>
-                  </div>
+                  <div className="md:col-span-2 pt-2"><button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: ''})} className="relative overflow-hidden group w-full py-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all hover:bg-rose-500 hover:text-white shadow-sm active:scale-[0.99]"><ShineEffect /><span className="relative z-10">REINICIAR FILTROS</span></button></div>
                </div>
             </div>
-            
             {isDeliveryFilterActive && (
-              <div className="bg-white rounded-[32px] md:rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.03)] border border-slate-100/80 overflow-hidden animate-fade-in transition-all">
-                <div className="p-6 md:p-10 border-b bg-blue-50/40 backdrop-blur-sm flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-                  <div className="relative">
-                    <h3 className="font-black text-blue-900 text-lg md:text-xl uppercase tracking-tighter mb-1">Historial de Transacciones</h3>
-                    <p className="text-blue-600/80 text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-2">
-                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse"></div>
-                      {filteredDelivery.length} Registros Encontrados
-                    </p>
-                  </div>
-                  <div className="relative group bg-white/90 backdrop-blur-md px-6 py-4 rounded-[24px] border border-blue-100 shadow-xl text-center transform transition-transform hover:scale-105 duration-500">
-                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Unidades</p>
-                    <p className="text-xl md:text-2xl font-black text-blue-600 tracking-tighter group-hover:scale-110 transition-transform">{filteredDelivery.reduce((acc, curr) => acc + (curr.cantidad || 0), 0)}</p>
-                  </div>
-                </div>
+              <div className="bg-white/95 backdrop-blur-md rounded-[32px] md:rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.05)] border border-slate-200 overflow-hidden animate-fade-in transition-all">
+                <div className="p-6 md:p-10 border-b bg-emerald-50 backdrop-blur-sm flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden"><div className="absolute top-0 right-0 w-64 h-64 bg-[#2e7d32]/5 rounded-full -mr-20 -mt-20 blur-3xl"></div><div className="relative"><h3 className="font-black text-[#1b5e20] text-lg md:text-xl uppercase tracking-tighter mb-1">Historial de Transacciones</h3><p className="text-[#2e7d32]/80 text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#2e7d32] rounded-full animate-pulse"></div>{filteredDelivery.length} Registros Encontrados</p></div><div className="relative group bg-white px-6 py-4 rounded-[24px] border border-emerald-100 shadow-xl text-center transform transition-transform hover:scale-105 duration-500"><p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Unidades</p><p className="text-xl md:text-2xl font-black text-[#2e7d32] tracking-tighter group-hover:scale-110 transition-transform">{filteredDelivery.reduce((acc, curr) => acc + (curr.cantidad || 0), 0)}</p></div></div>
                 <div className="overflow-x-auto scrollbar-hide">
                   <table className="w-full text-left table-fixed min-w-[800px]">
-                    <thead className="bg-slate-50/80 text-slate-400 font-black uppercase text-[9px] tracking-[0.2em] border-b border-slate-100">
-                      <tr>
-                        <th className="px-6 md:px-10 py-5 w-24 text-center">Cant.</th>
-                        <th className="px-6 md:px-10 py-5 w-1/3">Producto</th>
-                        <th className="px-6 md:px-10 py-5">Sección</th>
-                        <th className="px-6 md:px-10 py-5">Departamento</th>
-                        <th className="px-6 md:px-10 py-5 w-44">Fecha</th>
-                      </tr>
-                    </thead>
-                    <tbody className="text-slate-600 text-[11px] divide-y divide-slate-50/80">
+                    <thead className="bg-slate-100 text-slate-500 font-black uppercase text-[9px] tracking-[0.2em] border-b border-slate-200"><tr><th className="px-6 md:px-10 py-5 w-24 text-center">Cant.</th><th className="px-6 md:px-10 py-5 w-1/3">Producto</th><th className="px-6 md:px-10 py-5">Sección</th><th className="px-6 md:px-10 py-5">Departamento</th><th className="px-6 md:px-10 py-5 w-44">Fecha</th></tr></thead>
+                    <tbody className="text-slate-600 text-[11px] divide-y divide-slate-100">
                       {filteredDelivery.map((d, idx) => (
-                        <tr key={idx} className="hover:bg-blue-50/20 transition-all duration-300 group">
-                          <td className="px-6 md:px-10 py-4 text-center">
-                            <span className="font-black text-slate-900 text-xs bg-slate-100/50 px-2.5 py-1 rounded-xl group-hover:bg-blue-100 transition-colors">{d.cantidad}</span>
-                          </td>
-                          <td className="px-6 md:px-10 py-4">
-                            <div className="font-black text-blue-600 uppercase tracking-tight group-hover:translate-x-1 transition-transform truncate">{d.producto}</div>
-                          </td>
-                          <td className="px-6 md:px-10 py-4">
-                            <div className="font-black text-slate-800 uppercase tracking-tight truncate bg-slate-50/50 px-3 py-1.5 rounded-xl inline-block max-w-full group-hover:bg-white transition-colors">{d.seccion}</div>
-                          </td>
-                          <td className="px-6 md:px-10 py-4">
-                            <div className="font-bold text-slate-500 uppercase tracking-widest truncate">{d.departamento}</div>
-                          </td>
-                          <td className="px-6 md:px-10 py-4">
-                            <span className="font-black text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-lg uppercase tracking-tighter whitespace-nowrap">{d.fecha}</span>
-                          </td>
+                        <tr key={idx} className="hover:bg-emerald-50 transition-all duration-300 group">
+                          <td className="px-6 md:px-10 py-4 text-center"><span className="font-black text-slate-900 text-xs bg-slate-100 px-2.5 py-1 rounded-xl group-hover:bg-emerald-200 transition-colors">{d.cantidad}</span></td>
+                          <td className="px-6 md:px-10 py-4"><div className="font-black text-[#2e7d32] uppercase tracking-tight group-hover:translate-x-1 transition-transform truncate">{d.producto}</div></td>
+                          <td className="px-6 md:px-10 py-4"><div className="font-black text-slate-800 uppercase tracking-tight truncate bg-slate-50 px-3 py-1.5 rounded-xl inline-block max-w-full group-hover:bg-white transition-colors">{d.seccion}</div></td>
+                          <td className="px-6 md:px-10 py-4"><div className="font-bold text-slate-500 uppercase tracking-widest truncate">{d.departamento}</div></td>
+                          <td className="px-6 md:px-10 py-4"><span className="font-black text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-lg uppercase tracking-tighter whitespace-nowrap">{d.fecha}</span></td>
                         </tr>
                       ))}
-                      {filteredDelivery.length === 0 && (
-                        <tr>
-                          <td colSpan={5} className="px-10 py-24 text-center">
-                            <div className="flex flex-col items-center opacity-40">
-                              <div className="bg-slate-100 p-6 rounded-full mb-4 transform transition-transform group-hover:scale-110"><ICONS.Search /></div>
-                              <p className="font-black text-slate-300 text-[12px] uppercase tracking-[0.5em]">Sin resultados históricos</p>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1143,56 +608,39 @@ const App: React.FC = () => {
             )}
           </div>
         )}
-
-        {activeSection === AppSection.SETTINGS && (
-          <div className="max-w-3xl mx-auto bg-white p-10 md:p-20 rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.03)] border border-slate-100 animate-fade-in relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-14 opacity-[0.03] transform scale-[4] rotate-12 pointer-events-none">
-              <ICONS.Settings />
-            </div>
-            <div className="relative">
-              <h3 className="text-2xl font-black text-slate-800 mb-10 uppercase tracking-[0.4em] opacity-80 flex items-center gap-5">
-                <div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400"><ICONS.Settings /></div>
-                Sincronización
-              </h3>
-              <div className="space-y-10">
-                <div className="bg-slate-50/50 p-10 rounded-[32px] border border-slate-100/50 text-center relative group transition-all hover:bg-white hover:shadow-xl">
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-200">Cloud Sync Active</div>
-                  <span className="text-blue-600 font-black text-4xl md:text-6xl uppercase tracking-tighter group-hover:scale-110 transition-transform block">Ready</span>
-                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-6">Protocolo de enlace verificado</p>
-                </div>
-                <button 
-                  onClick={() => { syncData('inventory'); syncData('delivery'); }} 
-                  disabled={isSyncing} 
-                  className="w-full relative group overflow-hidden bg-blue-600 text-white font-black py-7 rounded-[32px] shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 text-[11px] uppercase tracking-[0.5em]"
-                >
-                  <ShineEffect />
-                  <span className="relative z-10">{isSyncing ? 'Conectando con Servidores...' : 'Actualizar Inventario'}</span>
-                </button>
-              </div>
+        {activeSection === AppSection.ORDER && (
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white/95 backdrop-blur-md p-6 md:p-10 rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.05)] border border-slate-200 relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-14 opacity-[0.04] transform scale-[4] rotate-12 pointer-events-none text-blue-600"><ICONS.ShoppingBag /></div>
+               <div className="relative"><h3 className="text-2xl font-black text-slate-800 mb-6 uppercase tracking-[0.4em] opacity-80 flex items-center gap-5"><div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500"><ICONS.ShoppingBag /></div>LISTA PRIORITARIA</h3>{lowStockItems.length === 0 ? ( <div className="bg-slate-50 p-20 rounded-[40px] border border-dashed border-slate-300 text-center"><p className="font-black text-slate-400 text-sm uppercase tracking-[0.3em]">Todo en orden. No hay productos con stock crítico.</p></div> ) : (
+                   <div className="space-y-4">
+                     {lowStockItems.map((item) => {
+                       let statusLabel = "ATENCIÓN"; let statusColor = "bg-[#0d47a1]";
+                       if (item.quantity === 0) { statusLabel = "CRÍTICO"; statusColor = "bg-[#b71c1c]"; } else if (item.quantity < item.minStock) { statusLabel = "URGENTE"; statusColor = "bg-[#e65100]"; }
+                       return (
+                         <div key={item.id} className="bg-white p-4 md:p-6 rounded-[28px] border border-slate-200 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between group hover:shadow-md transition-all gap-4">
+                           <div className="flex flex-col md:flex-row items-start md:items-center gap-4 flex-1 w-full"><div className={`${statusColor} text-white text-[9px] font-black px-3 py-1.5 rounded-xl uppercase tracking-widest shrink-0 shadow-sm ${statusLabel === 'CRÍTICO' ? 'animate-pulse' : ''}`}>{statusLabel}</div><div className="min-w-0"><h4 className="text-base font-black text-slate-800 uppercase tracking-tight truncate">{item.name}</h4><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-0.5">#{item.sku}</p></div></div>
+                           <div className="flex items-center justify-between md:justify-end gap-10 w-full md:w-auto pt-3 md:pt-0 border-t md:border-t-0 border-slate-100"><div className="flex flex-col items-center md:items-end"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Actual</p><p className={`text-xl font-black ${item.quantity === 0 ? 'text-[#b71c1c]' : 'text-slate-700'}`}>{item.quantity}</p></div><div className="flex flex-col items-center md:items-end"><p className="text-[8px] font-black text-slate-400 uppercase mb-1">Mínimo</p><p className="text-xl font-black text-slate-400">{item.minStock}</p></div></div>
+                         </div>
+                       );
+                     })}
+                   </div>
+                 )}</div>
             </div>
           </div>
         )}
       </main>
-
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100/50 px-2 py-4 flex justify-around items-center z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] rounded-t-[32px]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl border-t border-slate-200 px-2 py-4 flex justify-around items-center z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.08)] rounded-t-[32px]">
         {navItems.map((item) => (
-          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`group relative overflow-hidden flex flex-col items-center gap-2 min-w-[64px] transition-all duration-300 ${activeSection === item.id ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
-            <ShineEffect />
-            <div className={`relative z-10 p-2.5 rounded-2xl transition-all duration-500 ${activeSection === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110' : 'bg-transparent'}`}>
-              {item.icon}
-            </div>
-            <span className={`relative z-10 text-[10px] font-black uppercase tracking-tighter transition-all ${activeSection === item.id ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>{item.label}</span>
-            {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
-              <span className={`absolute top-0 right-1 bg-rose-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-[9px] font-black border-2 border-white leading-none shadow-md z-20 ${activeSection === item.id ? 'animate-none' : 'animate-bounce'}`}>
-                {finalizedRequests.length}
-              </span>
-            )}
+          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`group relative overflow-hidden flex flex-col items-center gap-2 min-w-[64px] transition-all duration-300 ${activeSection === item.id ? 'text-[#2e7d32]' : 'text-slate-400 hover:text-slate-600'}`}>
+            <ShineEffect /><div className={`relative z-10 p-2.5 rounded-2xl transition-all duration-500 ${activeSection === item.id ? 'bg-[#2e7d32] text-white shadow-lg shadow-emerald-200 scale-110' : 'bg-transparent'}`}>{item.icon}</div><span className={`relative z-10 text-[10px] font-black uppercase tracking-tighter transition-all ${activeSection === item.id ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>{item.label}</span>
+            {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && ( <span className={`absolute top-0 right-1 bg-rose-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-[9px] font-black border-2 border-white leading-none shadow-md z-20 ${activeSection === item.id ? 'animate-none' : 'animate-bounce'}`}>{finalizedRequests.length}</span> )}
+            {item.id === AppSection.ORDER && lowStockItems.length > 0 && ( <span className={`absolute top-0 right-1 bg-rose-500 text-white w-2 h-2 flex items-center justify-center rounded-full border border-white leading-none shadow-md z-20 animate-ping`}></span> )}
           </button>
         ))}
       </nav>
     </div>
   );
 };
-
 const root = ReactDOM.createRoot(document.getElementById('root')!);
 root.render(<React.StrictMode><App /></React.StrictMode>);
