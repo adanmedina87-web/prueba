@@ -85,12 +85,15 @@ const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOF
 const DELIVERY_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?usp=sharing';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9R2ocvOKfUpf78kVjZxG9EL5tbGxqtvu2Y-YeM7ADGbA41JdHdJ0GRmCJ3Qh8-LY/exec';
 
-const CustomLogo = () => (
-  <img 
-    src="https://yt3.ggpht.com/a-/AAuE7mAOAi4DgYrnVswYDrVeyBYZX0RPcjLf2EC6mw=s900-mo-c-c0xffffffff-rj-k-no" 
-    alt="Logo Inventario"
-    className="w-10 h-10 md:w-12 md:h-12 rounded-lg shadow-sm object-cover"
-  />
+const CustomLogo = ({ trigger }: { trigger: any }) => (
+  <div className="relative">
+    <img 
+      key={trigger}
+      src="https://yt3.ggpht.com/a-/AAuE7mAOAi4DgYrnVswYDrVeyBYZX0RPcjLf2EC6mw=s900-mo-c-c0xffffffff-rj-k-no" 
+      alt="Logo Inventario"
+      className="relative w-12 h-12 md:w-14 md:h-14 rounded-lg object-cover transform transition-transform duration-500 hover:scale-105 animate-rotate border-none outline-none shadow-none"
+    />
+  </div>
 );
 
 const ICONS = {
@@ -106,6 +109,11 @@ const ICONS = {
   Minus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" /></svg>,
   ChevronDown: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
 };
+
+// --- Shine Effect Component ---
+const ShineEffect = () => (
+  <div className="absolute inset-0 w-1/2 h-full bg-white/10 skew-x-[45deg] -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 pointer-events-none"></div>
+);
 
 // --- 3. FUNCIONES DE UTILIDAD ---
 const parseCSV = (text: string) => {
@@ -185,7 +193,6 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
 
   if (localSum === 0) return null;
 
-  // Pre-calcular los ángulos y datos de cada rebanada para poder ordenarlas por profundidad (eje Y)
   let angleSum = 0;
   const slices = data.map((item, i) => {
     const sliceAngle = (item.total / localSum) * 2 * Math.PI;
@@ -196,23 +203,20 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
     return { item, i, startAngle, endAngle, midAngle, sliceAngle };
   });
 
-  // Ordenar para renderizar primero las de atrás (sin(midAngle) mínimo) y al último las de adelante
   const sortedSlices = [...slices].sort((a, b) => Math.sin(a.midAngle) - Math.sin(b.midAngle));
 
   return (
-    <div className="bg-white p-6 md:p-12 rounded-[40px] shadow-sm border border-slate-100 mb-8 overflow-hidden">
+    <div className="bg-white p-6 md:p-12 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-slate-100/60 mb-8 overflow-hidden backdrop-blur-sm">
       <h3 className="text-xs font-black text-slate-800 mb-10 uppercase tracking-widest flex items-center gap-3">
-        <div className="w-2 h-6 bg-blue-600 rounded-full"></div>
+        <div className="w-2 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full shadow-lg shadow-blue-200"></div>
         {title || "Estadísticas"}
       </h3>
       <div className="flex flex-col lg:flex-row items-start justify-between gap-10 animate-fade-in relative min-h-[350px] lg:min-h-0">
-        <div className="relative w-full max-w-[320px] lg:max-w-[420px] lg:sticky lg:top-0">
-          <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_25px_rgba(0,0,0,0.15)] overflow-visible pointer-events-none">
+        <div className="relative w-full max-w-[320px] lg:max-w-[420px] lg:sticky lg:top-0 flex justify-center">
+          <svg viewBox="0 0 400 280" className="w-full drop-shadow-[0_25px_35px_rgba(30,64,175,0.15)] overflow-visible pointer-events-none transform transition-transform duration-700">
             {sortedSlices.map((slice) => {
               const { item, i, startAngle, endAngle, midAngle, sliceAngle } = slice;
               const isHighlighted = highlightedIndex === i;
-              
-              // Solo se eleva/desplaza si está resaltado (hover en leyenda)
               const explodeOffset = isHighlighted ? 45 : 0;
               const ox = explodeOffset * Math.cos(midAngle);
               const oy = explodeOffset * Math.sin(midAngle);
@@ -229,7 +233,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
                   key={`slice-group-${i}`}
                   style={{ 
                     transform: `translate(${ox}px, ${oy}px)`, 
-                    transition: 'transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)' 
+                    transition: 'transform 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)' 
                   }}
                 >
                   <path
@@ -241,7 +245,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
                       A ${radiusX} ${radiusY} 0 ${largeArcFlag} 0 ${x1} ${y1}
                     `}
                     fill={colors[i % colors.length]}
-                    filter="brightness(0.7)"
+                    filter="brightness(0.75)"
                   />
                   <path
                     d={`
@@ -252,7 +256,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
                       Z
                     `}
                     fill={colors[i % colors.length]}
-                    filter="brightness(0.5)"
+                    filter="brightness(0.55)"
                   />
                   <path
                     d={`
@@ -263,7 +267,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
                       Z
                     `}
                     fill={colors[i % colors.length]}
-                    filter="brightness(0.85)"
+                    filter="brightness(0.88)"
                   />
                   <path
                     d={`
@@ -273,8 +277,8 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
                       Z
                     `}
                     fill={colors[i % colors.length]}
-                    stroke="rgba(255,255,255,0.25)"
-                    strokeWidth="1.5"
+                    stroke="rgba(255,255,255,0.3)"
+                    strokeWidth="1"
                   />
                 </g>
               );
@@ -282,7 +286,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
           </svg>
         </div>
 
-        <div className="flex-1 w-full space-y-2">
+        <div className="flex-1 w-full space-y-3">
           {data.map((item, i) => (
             <div 
               key={`legend-${i}`} 
@@ -292,45 +296,45 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
             >
               <button 
                 onClick={() => setExpandedIndex(expandedIndex === i ? null : i)}
-                className={`w-full flex items-center justify-between p-3 rounded-2xl transition-all ${expandedIndex === i ? 'bg-blue-50 shadow-sm' : 'hover:bg-slate-50'}`}
+                className={`w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 transform ${expandedIndex === i ? 'bg-blue-50/80 shadow-[0_4px_12px_rgba(37,99,235,0.08)] ring-1 ring-blue-100 scale-[1.01]' : 'hover:bg-slate-50 hover:translate-x-1'}`}
               >
                 <div className="flex items-center gap-4">
-                  <div className="w-4 h-4 rounded-full shadow-inner" style={{ backgroundColor: colors[i % colors.length] }}></div>
+                  <div className="w-4 h-4 rounded-full shadow-inner border-2 border-white/50" style={{ backgroundColor: colors[i % colors.length] }}></div>
                   <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px] text-left">
                     {item.name}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100 group-hover:text-blue-600">
                     {Math.round((item.total / displayTotal) * 100)}%
                   </span>
                   <span className="text-[11px] font-black text-blue-600 w-8 text-right">
                     {item.total}
                   </span>
-                  <div className={`transition-transform duration-300 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}>
+                  <div className={`transition-transform duration-500 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}>
                     <ICONS.ChevronDown />
                   </div>
                 </div>
               </button>
               
-              {expandedIndex === i && item.sections.length > 0 && (
-                <div className="mt-1 ml-8 px-4 py-3 bg-white border border-blue-50 rounded-2xl animate-fade-in shadow-inner overflow-hidden">
-                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 border-b border-slate-50 pb-1 flex justify-between">
+              <div className={`overflow-hidden transition-all duration-500 ease-in-out ${expandedIndex === i ? 'max-h-[300px] opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
+                <div className="ml-8 px-5 py-4 bg-white/50 backdrop-blur-md border border-blue-50/50 rounded-2xl shadow-inner overflow-hidden">
+                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-50/50 pb-2 flex justify-between">
                     <span>Desglose</span>
                     <span>Cant. / %</span>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="space-y-2">
                     {item.sections.map((sec, j) => (
                       <div 
                         key={`sec-${j}`} 
-                        className="flex justify-between items-center group/item hover:bg-blue-50/50 rounded px-1 transition-colors cursor-default"
+                        className="flex justify-between items-center group/item hover:bg-blue-50/40 rounded px-2 py-1 transition-colors cursor-default"
                         onMouseEnter={() => setHighlightedIndex(i)}
                       >
                         <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">
                           {sec.name}
                         </span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">
+                          <span className="text-[10px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded shadow-sm">
                             {sec.quantity}
                           </span>
                           <span className="text-[9px] font-bold text-slate-400">
@@ -341,7 +345,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
                     ))}
                   </div>
                 </div>
-              )}
+              </div>
             </div>
           ))}
         </div>
@@ -383,36 +387,39 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
 
   return (
     <div className="relative w-full" ref={containerRef}>
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onFocus={() => query.trim().length > 0 && setIsOpen(true)}
-        placeholder={placeholder || "¿Qué producto buscas?"}
-        className="w-full px-4 py-3.5 md:px-5 md:py-3 pl-12 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm text-sm font-bold uppercase tracking-tight"
-      />
-      <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
+      <div className="relative group">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => query.trim().length > 0 && setIsOpen(true)}
+          placeholder={placeholder || "¿Qué producto buscas?"}
+          className="w-full px-4 py-3 md:px-5 md:py-3.5 pl-12 bg-slate-50/50 border border-slate-200/60 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight"
+        />
+        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-blue-500"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
+      </div>
       {isOpen && suggestions.length > 0 && (
-        <ul className="absolute z-50 w-full mt-2 bg-white border border-slate-100 rounded-xl shadow-xl overflow-hidden divide-y divide-slate-50 max-h-[300px] overflow-y-auto">
+        <ul className="absolute z-[100] w-full mt-3 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] overflow-hidden divide-y divide-slate-50 max-h-[340px] overflow-y-auto animate-fade-in scrollbar-hide">
           {suggestions.map((p) => (
-            <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center transition-colors i-active:bg-blue-100">
-              <div className="flex items-center gap-3 flex-1 pr-3 truncate">
+            <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50/80 cursor-pointer flex justify-between items-center transition-all i-active:bg-blue-100 group">
+              <div className="flex items-center gap-4 flex-1 pr-3 truncate">
                 {p.imageUrl && (
-                  <img 
-                    src={formatImageUrl(p.imageUrl)} 
-                    alt={p.name} 
-                    className="w-10 h-10 object-cover rounded-lg bg-slate-100 shadow-sm shrink-0"
-                    onError={(e) => (e.currentTarget.style.display = 'none')}
-                  />
+                  <div className="relative shrink-0 overflow-hidden rounded-lg shadow-sm border border-slate-100">
+                    <img 
+                      src={formatImageUrl(p.imageUrl)} 
+                      alt={p.name} 
+                      className="w-11 h-11 object-cover transform transition-transform duration-500 group-hover:scale-110"
+                      onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')}
+                    />
+                  </div>
                 )}
                 <div className="min-w-0">
-                  <p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate">{p.name}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest truncate">{p.location}</p>
+                  <p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-md shrink-0">STOCK: {p.quantity}</span>
-                <div className="bg-blue-600 text-white p-1.5 rounded-lg shadow-sm"><ICONS.Plus /></div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-[10px] font-black text-blue-600 bg-blue-100/50 px-3 py-1.5 rounded-lg shadow-sm shrink-0">STOCK: {p.quantity}</span>
+                <div className="bg-blue-600 text-white p-2 rounded-xl shadow-md group-hover:rotate-90 transition-transform duration-300"><ICONS.Plus /></div>
               </div>
             </li>
           ))}
@@ -717,7 +724,7 @@ const App: React.FC = () => {
     }
   };
 
-  const finalizarPedido = async () => {
+  const finalizarPedido = async (e: React.MouseEvent) => {
     const { departamento, seccion } = solicitudFilters;
     if (!departamento.trim() || !seccion.trim()) return;
     const userItems = currentOrderItems.filter(i => i.seccion === seccion);
@@ -770,80 +777,138 @@ const App: React.FC = () => {
     { id: AppSection.SETTINGS, icon: <ICONS.Settings />, label: 'Ajustes' },
   ];
 
+  const hasSolicitudFilters = !!(solicitudFilters.seccion && solicitudFilters.departamento);
+
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#f8fafc] pb-24 md:pb-0 font-['Plus_Jakarta_Sans']">
-      <aside className="hidden md:flex w-64 bg-white border-r border-slate-200 flex-col fixed h-full z-20 shadow-sm">
-        <div className="p-8 flex items-center gap-4"><CustomLogo /><h1 className="font-black text-base text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-sm">Bodega</span></h1></div>
-        <nav className="flex-1 px-4 space-y-1 mt-4">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#fbfcfd] pb-24 md:pb-0 font-['Plus_Jakarta_Sans'] selection:bg-blue-100 selection:text-blue-900">
+      <aside className="hidden md:flex w-72 bg-white/80 backdrop-blur-xl border-r border-slate-200/50 flex-col fixed h-full z-40 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+        <div className="p-10 flex items-center gap-2">
+          <CustomLogo trigger={activeSection} />
+          <div>
+            <h1 className="font-black text-lg text-slate-800 tracking-tighter leading-none uppercase">Stock<br/><span className="text-blue-600 text-sm tracking-widest">Bodega</span></h1>
+          </div>
+        </div>
+        <nav className="flex-1 px-6 space-y-2 mt-4">
           {navItems.map((item) => (
-            <button key={item.id} onClick={() => setActiveSection(item.id)} className={`w-full flex items-center justify-between px-5 py-4 rounded-2xl transition-all font-black text-xs uppercase tracking-widest ${activeSection === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 scale-[1.02]' : 'text-slate-500 hover:bg-slate-50'}`}>
-              <div className="flex items-center gap-4">
-                {item.icon} <span>{item.label}</span>
+            <button 
+              key={item.id} 
+              onClick={() => setActiveSection(item.id)} 
+              className={`group relative overflow-hidden w-full flex items-center justify-between px-6 py-4 rounded-2xl transition-all duration-300 font-black text-xs uppercase tracking-widest ${activeSection === item.id ? 'bg-blue-600 text-white shadow-[0_10px_25px_rgba(37,99,235,0.3)] scale-[1.03]' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-800'}`}
+            >
+              <ShineEffect />
+              <div className="flex items-center gap-5 relative z-10">
+                <span className={`transition-transform duration-500 ${activeSection === item.id ? 'scale-110' : 'group-hover:scale-110'}`}>{item.icon}</span>
+                <span>{item.label}</span>
               </div>
               {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
-                <span className="bg-rose-500 !text-white px-1.5 py-0.5 rounded-full text-[8px] font-black leading-none flex items-center justify-center">
+                <span className={`relative z-10 px-2 py-1 rounded-lg text-[9px] font-black leading-none flex items-center justify-center transition-colors ${activeSection === item.id ? 'bg-white text-blue-600' : 'bg-rose-500 text-white animate-pulse'}`}>
                   {finalizedRequests.length}
                 </span>
               )}
             </button>
           ))}
         </nav>
+        <div className="p-8 mt-auto">
+          <div className="p-4 bg-slate-50/50 rounded-2xl border border-slate-100/50 text-center">
+             <p className="text-[8px] font-black text-slate-300 uppercase tracking-widest mb-1">Status Sistema</p>
+             <div className="flex items-center justify-center gap-2">
+               <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div>
+               <span className="text-[9px] font-black text-emerald-600 uppercase">En Línea</span>
+             </div>
+          </div>
+        </div>
       </aside>
 
-      <main className={`flex-1 md:ml-64 p-4 md:p-12 max-w-6xl mx-auto w-full`}>
-        <header className="flex flex-col mb-6 md:mb-10">
-          <div className="flex justify-between items-center mb-6">
-            <div className="hidden md:block">
-              <h2 className="text-2xl md:text-3xl font-bold text-slate-800 tracking-tighter uppercase leading-none">
-                {activeSection === AppSection.DASHBOARD && 'Vista General'}
-                {activeSection === AppSection.QUERY && 'Consultas de Productos'}
-                {activeSection === AppSection.SOLICITUD && 'Gestión de Solicitudes'}
-                {activeSection === AppSection.ENTREGA && 'Control de Historial'}
-                {activeSection === AppSection.SETTINGS && 'Configuración'}
-              </h2>
+      <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full transition-all duration-700`}>
+        <header className="flex flex-col mb-4 md:mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <div className="hidden md:block animate-fade-in w-full">
+              <div className="flex justify-between items-start">
+                <h2 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tighter uppercase leading-none mb-2">
+                  {activeSection === AppSection.DASHBOARD && 'Vista General'}
+                  {activeSection === AppSection.QUERY && 'Consultas'}
+                  {activeSection === AppSection.SOLICITUD && (
+                    hasSolicitudFilters 
+                    ? `SOLICITUD ${solicitudFilters.departamento.toUpperCase()} ${solicitudFilters.seccion.toUpperCase()}`
+                    : 'SOLICITUD'
+                  )}
+                  {activeSection === AppSection.ENTREGA && 'Historial'}
+                  {activeSection === AppSection.SETTINGS && 'Configuración'}
+                </h2>
+                {activeSection === AppSection.SOLICITUD && hasSolicitudFilters && (
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={loadPreviousOrder} 
+                      className="text-blue-600 font-black text-[10px] uppercase tracking-widest bg-blue-50 px-4 py-2 rounded-xl transition-all hover:bg-blue-100 active:scale-95 border border-blue-100/50 flex items-center gap-2"
+                    >
+                      <ICONS.Delivery /> PEDIDO ANTERIOR
+                    </button>
+                    <button 
+                      onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} 
+                      className="text-rose-500 font-black text-[10px] uppercase hover:underline tracking-widest bg-rose-50 px-4 py-2 rounded-xl transition-all hover:bg-rose-100 active:scale-95 border border-rose-100/50 flex flex-col items-center justify-center leading-none"
+                    >
+                      <span>BORRAR</span>
+                      <span className="text-[7px] mt-0.5 opacity-60">FILTROS</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="md:hidden flex items-center gap-3"><CustomLogo /><h1 className="font-black text-sm text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-[10px]">Bodega</span></h1></div>
+            <div className="md:hidden flex items-center gap-2"><CustomLogo trigger={activeSection} /><h1 className="font-black text-base text-slate-800 tracking-tight leading-none uppercase">Stock<br/><span className="text-blue-600 text-[10px] tracking-widest">Bodega</span></h1></div>
           </div>
         </header>
 
         {activeSection === AppSection.DASHBOARD && (
-          <div className="space-y-6 md:space-y-10 animate-fade-in">
+          <div className="space-y-6 animate-fade-in">
             {deliveryStats.top5.length > 0 ? ( 
               <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} title="Top 5 Productos Solicitados" /> 
             ) : (
-              <div className="py-20 text-center text-slate-400 text-[10px] font-black uppercase tracking-widest bg-white border rounded-[40px]">No hay datos suficientes para visualizar el gráfico.</div>
+              <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div>
             )}
           </div>
         )}
 
         {activeSection === AppSection.QUERY && (
-          <div className="animate-fade-in space-y-6 md:space-y-10">
-            <div className="bg-white p-6 md:p-10 rounded-[24px] md:rounded-[32px] shadow-sm border border-slate-100">
-               <h3 className="text-sm font-black text-slate-800 mb-6 uppercase tracking-widest text-center">Buscador de Productos</h3>
+          <div className="animate-fade-in space-y-4 md:space-y-6">
+            <div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.03)] border border-slate-100/60 transition-all">
                <AutocompleteSearch products={inventory} onSelect={setSelectedProduct} placeholder="Escribe el nombre del producto..." />
             </div>
             {selectedProduct && (
-              <div className="max-w-3xl mx-auto animate-fade-in">
-                <div className="bg-white rounded-[40px] shadow-2xl border border-slate-100 p-8 md:p-12">
-                   {selectedProduct.imageUrl && (
-                     <div className="w-full mb-8 flex justify-center">
-                       <img 
-                        src={formatImageUrl(selectedProduct.imageUrl)} 
-                        alt={selectedProduct.name} 
-                        className="max-h-64 md:max-h-80 w-auto rounded-3xl shadow-lg border border-slate-100 object-contain"
-                        onError={(e) => (e.currentTarget.style.display = 'none')}
-                       />
+              <div className="max-w-4xl mx-auto animate-fade-in">
+                <div className="bg-white rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.03)] border border-slate-100/80 p-5 md:p-8 overflow-hidden relative">
+                   <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-600"></div>
+                   <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+                     {selectedProduct.imageUrl && (
+                       <div className="shrink-0 relative">
+                        <div className="absolute -inset-4 bg-blue-100/30 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div>
+                        <img 
+                          src={formatImageUrl(selectedProduct.imageUrl)} 
+                          alt={selectedProduct.name} 
+                          className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]"
+                          onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')}
+                        />
+                       </div>
+                     )}
+                     <div className="flex-1 w-full">
+                        <div className="flex justify-between items-start w-full">
+                          <div className="flex-1 pr-4">
+                            <h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4>
+                          </div>
+                          <div className="shrink-0 text-right">
+                            <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p>
+                            <p className="text-sm font-black text-slate-700 bg-slate-50 px-3 py-1 rounded-lg border border-slate-100 shadow-sm">#{selectedProduct.sku}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 flex items-center gap-4 bg-slate-50/50 p-4 rounded-xl border border-slate-100/50">
+                           <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center font-black text-blue-600 text-lg">
+                             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+                           </div>
+                           <div className="flex flex-col">
+                             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest opacity-60">Existencia en Bodega:</span>
+                             <span className="text-2xl font-black text-blue-600 leading-none mt-1">{selectedProduct.quantity}</span>
+                           </div>
+                        </div>
                      </div>
-                   )}
-                   <span className="text-[10px] font-black text-blue-600 uppercase bg-blue-50 px-4 py-2 rounded-full mb-6 flex items-center gap-2 max-w-fit">Ficha de Producto</span>
-                   <h4 className="text-2xl md:text-4xl font-black text-slate-800 uppercase leading-none mb-8">{selectedProduct.name}</h4>
-                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">Ubicación</p><p className="text-lg text-slate-800 font-bold uppercase">{selectedProduct.location}</p></div>
-                      <div><p className="text-[10px] font-black text-slate-400 uppercase mb-2">SKU</p><p className="text-lg text-slate-800 font-bold uppercase">#{selectedProduct.sku}</p></div>
-                   </div>
-                   <div className="bg-blue-600 p-10 rounded-[32px] text-white flex justify-between items-center shadow-2xl border-b-8 border-blue-800">
-                      <div><p className="text-blue-100 font-black uppercase text-xs tracking-widest mb-1">Cantidad Actual</p><p className="text-sm text-blue-200 opacity-80 uppercase font-black">Stock disponible</p></div>
-                      <h5 className="text-5xl md:text-7xl font-black">{selectedProduct.quantity}</h5>
                    </div>
                 </div>
               </div>
@@ -852,76 +917,120 @@ const App: React.FC = () => {
         )}
 
         {activeSection === AppSection.SOLICITUD && (
-          <div className="animate-fade-in space-y-4">
-            <div className="bg-white p-4 md:p-6 rounded-[24px] shadow-sm border border-slate-100">
-               <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-black text-slate-800 text-[10px] md:text-xs uppercase tracking-widest">Sección Solicitante</h3>
-                 <button onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} className="text-rose-500 font-bold text-[8px] uppercase hover:underline">LIMPIAR</button>
-               </div>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Sección</label>
-                    <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => handleSolicitanteSeccionChange(e.target.value)} placeholder="" className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
-                    <datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
-                  </div>
-                  <div className="space-y-1">
-                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Departamento</label>
-                    <input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="Depto..." className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500 transition-all" />
-                    <datalist id="deptos-list-smart">{allPossibleDeptos.map(d => <option key={d} value={d} />)}</datalist>
-                  </div>
-               </div>
-               {solicitudFilters.seccion.trim() !== '' && (
-                 <div className="mt-3">
-                   <button onClick={loadPreviousOrder} className="bg-blue-50 text-blue-600 font-black px-4 py-2 rounded-lg text-[8px] uppercase tracking-widest hover:bg-blue-100 transition-colors border border-blue-100 shadow-sm flex items-center gap-2"><ICONS.Delivery /> REPETIR ÚLTIMO PEDIDO</button>
+          <div className="animate-fade-in space-y-3 md:space-y-4 max-w-4xl mx-auto">
+            {!hasSolicitudFilters && (
+              <div className="bg-white p-3 md:p-4 rounded-[32px] shadow-[0_15px_40px_rgba(0,0,0,0.02)] border border-slate-100/60 transition-all hover:shadow-[0_25px_50px_rgba(0,0,0,0.05)]">
+                 <div className="flex justify-between items-center mb-3 border-b border-slate-50 pb-2">
+                   <h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.2em] opacity-70">Identificación del Solicitante</h3>
+                   <button onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} className="text-rose-500 font-black text-[8px] uppercase hover:underline tracking-widest bg-rose-50 px-2 py-1 rounded-lg transition-colors hover:bg-rose-100">BORRAR</button>
                  </div>
-               )}
-            </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1 group">
+                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección / Aula</label>
+                      <input type="text" list="secciones-list-smart" value={solicitudFilters.seccion} onChange={(e) => handleSolicitanteSeccionChange(e.target.value)} placeholder="" className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" />
+                      <datalist id="secciones-list-smart">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
+                    </div>
+                    <div className="space-y-1 group">
+                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento</label>
+                      <input type="text" list="deptos-list-smart" value={solicitudFilters.departamento} onChange={(e) => setSolicitudFilters({...solicitudFilters, departamento: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" />
+                      <datalist id="deptos-list-smart">{allPossibleDeptos.map(d => <option key={d} value={d} />)}</datalist>
+                    </div>
+                 </div>
+                 {solicitudFilters.seccion.trim() !== '' && (
+                   <div className="mt-4 flex justify-center">
+                     <button onClick={loadPreviousOrder} className="group relative overflow-hidden bg-blue-50 text-blue-600 font-black px-6 py-2 rounded-xl text-[9px] uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all duration-500 border border-blue-100 shadow-sm flex items-center gap-2 active:scale-95">
+                       <ShineEffect />
+                       <div className="relative z-10 flex items-center gap-2"><ICONS.Delivery /> CARGAR ÚLTIMO PEDIDO</div>
+                     </button>
+                   </div>
+                 )}
+              </div>
+            )}
 
-            <div className="flex gap-2">
-              <button onClick={() => setSolicitudStep('crear')} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-[0.15em] transition-all ${solicitudStep === 'crear' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Crear Pedido</button>
-              <button onClick={() => setSolicitudStep('cerrar')} className={`flex-1 py-2 rounded-xl font-black text-[9px] uppercase tracking-[0.15em] transition-all relative ${solicitudStep === 'cerrar' ? 'bg-blue-600 text-white shadow-lg' : 'bg-white text-slate-400 border'}`}>Cerrar Pedido {finalizedRequests.length > 0 && <span className="ml-1 bg-rose-500 text-white px-1.5 rounded-full text-[8px]">{finalizedRequests.length}</span>}</button>
+            <div className="flex gap-2 p-1.5 bg-white/50 backdrop-blur rounded-xl border border-slate-100">
+              <button onClick={() => setSolicitudStep('crear')} className={`flex-1 relative overflow-hidden py-2 rounded-lg font-black text-[9px] uppercase tracking-[0.3em] transition-all duration-500 transform ${solicitudStep === 'crear' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-transparent text-slate-400 hover:bg-white/80 hover:text-slate-600'}`}>
+                <ShineEffect />
+                <span className="relative z-10">Nuevo Pedido</span>
+              </button>
+              <button onClick={() => setSolicitudStep('cerrar')} className={`flex-1 relative overflow-hidden py-2 rounded-lg font-black text-[9px] uppercase tracking-[0.3em] transition-all duration-500 transform ${solicitudStep === 'cerrar' ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'bg-transparent text-slate-400 hover:bg-white/80 hover:text-slate-600'}`}>
+                <ShineEffect />
+                <span className="relative z-10">Pedidos Listos</span>
+                {finalizedRequests.length > 0 && <span className="absolute top-0 right-2 bg-rose-500 text-white px-1.5 py-0.5 rounded-full text-[8px] shadow-sm animate-bounce z-20">{finalizedRequests.length}</span>}
+              </button>
             </div>
 
             {solicitudStep === 'crear' && (
               <div className="space-y-4 animate-fade-in">
-                <div className="bg-white p-4 md:p-6 rounded-[24px] border border-slate-100 shadow-sm">
-                  <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-widest">Añadir Productos</h4>
-                  <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe para añadir rápido..." />
+                <div className="bg-white p-4 rounded-[28px] border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+                  <h4 className="text-[9px] font-black text-slate-800 uppercase mb-3 tracking-[0.2em] opacity-60">Añadir Activos</h4>
+                  <AutocompleteSearch products={inventory} onSelect={addItemToOrder} placeholder="Escribe el nombre del producto..." />
                 </div>
                 {currentOrderItems.filter(i => i.seccion === solicitudFilters.seccion).length > 0 && (
-                  <div className="bg-white rounded-[24px] border shadow-sm overflow-hidden animate-fade-in">
-                    <div className="p-4 bg-slate-50 border-b flex justify-between items-center"><h4 className="font-black text-slate-800 text-[9px] uppercase tracking-widest">Lista Temporal</h4><button onClick={clearTemporaryOrders} className="text-rose-500 font-bold text-[8px] uppercase">LIMPIAR LISTA</button></div>
+                  <div className="bg-white rounded-[32px] border border-slate-100 shadow-xl overflow-hidden animate-fade-in transition-all">
+                    <div className="p-4 bg-slate-50/80 border-b flex justify-between items-center">
+                      <h4 className="font-black text-slate-800 text-[9px] uppercase tracking-[0.3em]">Lista Temporal de Carga</h4>
+                      <button onClick={clearTemporaryOrders} className="text-rose-500 font-black text-[8px] uppercase tracking-widest bg-white px-2 py-1 rounded-md border border-rose-100 shadow-sm transition-all hover:bg-rose-500 hover:text-white">LIMPIAR TODO</button>
+                    </div>
                     <div className="divide-y divide-slate-50">
                       {currentOrderItems.filter(i => i.seccion === solicitudFilters.seccion).map((item, i) => (
-                        <div key={item.id || i} className="p-3 md:p-4 flex justify-between items-center">
-                          <div className="flex items-center gap-3"><span className="font-bold text-slate-800 text-xs uppercase">{item.producto}</span></div>
+                        <div key={item.id || i} className="p-2 md:p-3 flex justify-between items-center group transition-colors hover:bg-slate-50/50">
                           <div className="flex items-center gap-3">
-                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), -1)} className="bg-slate-100 p-1.5 rounded-lg hover:bg-rose-100 transition-colors scale-90"><ICONS.Minus /></button>
-                             <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-lg font-black text-xs w-10 text-center">{item.cantidad}</span>
-                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), 1)} className="bg-slate-100 p-1.5 rounded-lg hover:bg-blue-100 transition-colors scale-90"><ICONS.Plus /></button>
+                            <div className="w-1 h-1 bg-blue-600 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <span className="font-black text-slate-800 text-xs uppercase tracking-tight">{item.producto}</span>
+                          </div>
+                          <div className="flex items-center gap-3">
+                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), -1)} className="bg-white p-1.5 rounded-lg border border-slate-100 text-slate-400 hover:bg-rose-50 hover:text-rose-500 hover:border-rose-100 shadow-sm active:scale-90 transition-all"><ICONS.Minus /></button>
+                             <span className="bg-blue-600 text-white px-3 py-1 rounded-lg font-black text-xs w-10 text-center shadow-lg shadow-blue-100">{item.cantidad}</span>
+                             <button onClick={() => updateItemQuantity(currentOrderItems.indexOf(item), 1)} className="bg-white p-1.5 rounded-lg border border-slate-100 text-slate-400 hover:bg-blue-50 hover:text-blue-500 hover:border-blue-100 shadow-sm active:scale-90 transition-all"><ICONS.Plus /></button>
                           </div>
                         </div>
                       ))}
                     </div>
-                    <div className="p-4 bg-slate-50 border-t"><button onClick={finalizarPedido} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black py-4 rounded-xl text-[9px] uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all flex items-center justify-center gap-2">FINALIZAR PEDIDO</button></div>
+                    <div className="p-4 bg-slate-50/80 border-t">
+                      <button onClick={(e) => finalizarPedido(e)} className="relative overflow-hidden group w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-black py-4 rounded-[20px] text-[10px] uppercase tracking-[0.4em] shadow-2xl shadow-blue-200 active:scale-[0.98] transition-all flex items-center justify-center gap-3">
+                        <ShineEffect />
+                        <span className="relative z-10 flex items-center gap-3">FINALIZAR PEDIDO <ICONS.Check /></span>
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
             )}
 
             {solicitudStep === 'cerrar' && (
-              <div className="space-y-4 animate-fade-in">
+              <div className="space-y-6 animate-fade-in">
                 {finalizedRequests.length === 0 ? (
-                  <div className="bg-white p-10 rounded-[24px] border text-center flex flex-col items-center"><div className="bg-slate-50 p-4 rounded-full mb-4"><ICONS.Solicitud /></div><p className="font-black text-slate-300 text-[8px] uppercase tracking-widest">No hay pedidos pendientes</p></div>
+                  <div className="bg-white p-20 rounded-[48px] border border-slate-100/60 shadow-inner text-center flex flex-col items-center opacity-80">
+                    <div className="bg-slate-50 p-6 rounded-full mb-6 border border-slate-100 animate-pulse"><ICONS.Solicitud /></div>
+                    <p className="font-black text-slate-300 text-[10px] uppercase tracking-[0.3em]">No hay pedidos pendientes de entrega</p>
+                  </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
                     {finalizedRequests.map((req) => (
-                      <div key={req.id} className="bg-white rounded-[24px] border shadow-md overflow-hidden flex flex-col animate-fade-in">
-                        <div className="p-4 bg-blue-50 border-b"><div className="flex justify-between items-center mb-2"><span className="bg-white px-2 py-0.5 rounded-full font-black text-[7px] text-blue-600 uppercase tracking-widest">#{req.id.split('-').pop()}</span><span className="text-[8px] font-bold text-slate-400">{req.fecha}</span></div><h4 className="font-black text-slate-800 text-sm uppercase leading-none tracking-tight">{req.seccion}</h4><p className="text-[7px] font-bold text-blue-600 uppercase tracking-widest mt-1 truncate">{req.departamento}</p></div>
-                        <div className="p-4 flex-1 space-y-2">{req.items.map((item, idx) => ( <div key={idx} className="flex justify-between items-center text-[10px] font-bold border-b border-dashed pb-1"><span className="text-slate-800 uppercase truncate pr-2">{item.producto}</span><span className="text-blue-600 font-black">x{item.cantidad}</span></div> ))}</div>
-                        <div className="p-4 bg-slate-50 flex gap-2">
-                          <button onClick={() => handleCancelRequest(req.id)} className="flex-1 bg-rose-500 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-rose-700 active:scale-95 transition-all">CANCELAR</button>
-                          <button onClick={() => handleConfirmOk(req)} className="flex-1 bg-blue-600 text-white font-black py-3 rounded-lg text-[9px] uppercase tracking-widest shadow-md flex items-center justify-center gap-2 border-b-2 border-blue-800 active:scale-95 transition-all">OK</button>
+                      <div key={req.id} className="group bg-white rounded-[40px] border border-slate-100 shadow-[0_15px_35px_rgba(0,0,0,0.03)] overflow-hidden flex flex-col animate-fade-in transition-all duration-500 hover:shadow-[0_25px_50px_rgba(0,0,0,0.08)] hover:-translate-y-1">
+                        <div className="p-6 md:p-8 bg-blue-50/50 border-b border-slate-100/50 relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-full h-1 bg-blue-600"></div>
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="bg-white px-3 py-1 rounded-lg font-black text-[9px] text-blue-600 uppercase tracking-widest shadow-sm border border-blue-50">#{req.id.split('-').pop()}</span>
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter bg-white/60 px-2 py-1 rounded-md">{req.fecha}</span>
+                          </div>
+                          <h4 className="font-black text-slate-800 text-lg md:text-xl uppercase leading-none tracking-tighter mb-1">{req.seccion}</h4>
+                          <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest opacity-80 truncate">{req.departamento}</p>
+                        </div>
+                        <div className="p-6 md:p-8 flex-1 space-y-3 bg-white">
+                          {req.items.map((item, idx) => ( 
+                            <div key={idx} className="flex justify-between items-center text-[11px] font-black border-b border-slate-50 pb-2 group/item">
+                              <span className="text-slate-600 uppercase truncate pr-4 transition-colors group-hover/item:text-slate-900">{item.producto}</span>
+                              <span className="text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg shadow-sm">x{item.cantidad}</span>
+                            </div> 
+                          ))}
+                        </div>
+                        <div className="p-6 md:p-8 bg-slate-50/50 border-t border-slate-100/50 flex gap-4">
+                          <button onClick={() => handleCancelRequest(req.id)} className="flex-1 bg-white text-rose-500 font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-sm hover:bg-rose-500 hover:text-white transition-all duration-300 border border-rose-100 active:scale-95">CANCELAR</button>
+                          <button onClick={() => handleConfirmOk(req)} className="relative overflow-hidden group flex-1 bg-blue-600 text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all duration-300">
+                            <ShineEffect />
+                            <span className="relative z-10">OK</span>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -933,40 +1042,148 @@ const App: React.FC = () => {
         )}
 
         {activeSection === AppSection.ENTREGA && (
-          <div className="animate-fade-in space-y-6 md:space-y-10">
-            <div className="bg-white p-5 md:p-10 rounded-[32px] shadow-sm border border-slate-100">
-               <div className="flex justify-between items-center mb-8"><h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-widest">Búsqueda en Historial</h3></div>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Sección</label><input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="Buscar..." className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase outline-none focus:ring-2 focus:ring-blue-500" /><datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist></div>
-                  <div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Departamento</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-sm font-bold uppercase appearance-none"><option value="">TODOS</option>{uniqueDepartamentosHistory.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
-                  <div className="grid grid-cols-2 gap-4 md:col-span-2"><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Desde</label><input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs font-bold" /></div><div className="space-y-2"><label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Hasta</label><input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-3 bg-slate-50 border rounded-xl text-xs font-bold" /></div></div>
-                  <div className="flex items-end"><button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: ''})} className="w-full py-4 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest">Limpiar Filtros</button></div>
+          <div className="animate-fade-in space-y-6 md:space-y-8">
+            <div className="bg-white p-3 md:p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.02)] border border-slate-100/60 transition-all hover:shadow-[0_25px_50px_rgba(0,0,0,0.05)]">
+               <div className="flex justify-between items-center mb-3 border-b border-slate-50 pb-2">
+                 <h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.3em] opacity-70">Panel de Filtrado Avanzado</h3>
+               </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1 group">
+                    <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección</label>
+                    <input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" />
+                    <datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist>
+                  </div>
+                  <div className="space-y-1 group">
+                    <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento Destino</label>
+                    <select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm">
+                      <option value="">TODOS LOS DEPTOS</option>
+                      {uniqueDepartamentosHistory.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                    <div className="space-y-1 group">
+                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Inicial</label>
+                      <input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" />
+                    </div>
+                    <div className="space-y-1 group">
+                      <label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Límite</label>
+                      <input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-2 bg-slate-50/50 border border-slate-200/60 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" />
+                    </div>
+                  </div>
+                  <div className="md:col-span-2 pt-2">
+                    <button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: ''})} className="relative overflow-hidden group w-full py-3 bg-rose-50 border border-rose-100 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all hover:bg-rose-500 hover:text-white shadow-sm active:scale-[0.99]">
+                      <ShineEffect />
+                      <span className="relative z-10">REINICIAR FILTROS</span>
+                    </button>
+                  </div>
                </div>
             </div>
             
             {isDeliveryFilterActive && (
-              <div className="bg-white rounded-[40px] shadow-sm border overflow-hidden animate-fade-in">
-                <div className="p-8 border-b bg-blue-50 flex justify-between items-center"><div><h3 className="font-black text-blue-800 text-sm md:text-base uppercase tracking-tight">Registro de Entregas</h3><p className="text-blue-600 text-[10px] font-bold uppercase mt-1 tracking-widest">{filteredDelivery.length} resultados</p></div><div className="bg-white px-5 py-3 rounded-2xl border text-center"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Total</p><p className="text-xl font-black text-blue-600">{filteredDelivery.reduce((acc, curr) => acc + (curr.cantidad || 0), 0)}</p></div></div>
-                <div className="overflow-x-auto"><table className="w-full text-left table-fixed min-w-[800px]"><thead className="bg-slate-50 text-slate-400 font-black uppercase text-[10px] tracking-widest"><tr><th className="px-8 py-6 w-20 text-center">Cant.</th><th className="px-8 py-6 w-1/3">Producto</th><th className="px-8 py-6">Sección</th><th className="px-8 py-6">Depto</th><th className="px-8 py-6 w-48">Fecha</th></tr></thead><tbody className="text-slate-600 text-[11px] divide-y">{filteredDelivery.map((d, idx) => (<tr key={idx} className="hover:bg-slate-50 transition-colors"><td className="px-8 py-4 text-center font-black text-slate-800 text-sm">{d.cantidad}</td><td className="px-8 py-4 font-bold text-blue-600 uppercase truncate">{d.producto}</td><td className="px-8 py-4 font-black text-slate-800 uppercase tracking-tight truncate">{d.seccion}</td><td className="px-8 py-4 font-bold text-slate-800 uppercase truncate">{d.departamento}</td><td className="px-8 py-4 font-bold text-slate-500 bg-slate-50/50">{d.fecha}</td></tr>))}{filteredDelivery.length === 0 && (<tr><td colSpan={5} className="px-8 py-20 text-center"><p className="font-black text-slate-300 text-[12px] uppercase tracking-widest">No hay registros</p></td></tr>)}</tbody></table></div>
+              <div className="bg-white rounded-[32px] md:rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.03)] border border-slate-100/80 overflow-hidden animate-fade-in transition-all">
+                <div className="p-6 md:p-10 border-b bg-blue-50/40 backdrop-blur-sm flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+                  <div className="relative">
+                    <h3 className="font-black text-blue-900 text-lg md:text-xl uppercase tracking-tighter mb-1">Historial de Transacciones</h3>
+                    <p className="text-blue-600/80 text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-2">
+                      <div className="w-1.5 h-1.5 bg-blue-600 rounded-full animate-pulse"></div>
+                      {filteredDelivery.length} Registros Encontrados
+                    </p>
+                  </div>
+                  <div className="relative group bg-white/90 backdrop-blur-md px-6 py-4 rounded-[24px] border border-blue-100 shadow-xl text-center transform transition-transform hover:scale-105 duration-500">
+                    <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Unidades</p>
+                    <p className="text-xl md:text-2xl font-black text-blue-600 tracking-tighter group-hover:scale-110 transition-transform">{filteredDelivery.reduce((acc, curr) => acc + (curr.cantidad || 0), 0)}</p>
+                  </div>
+                </div>
+                <div className="overflow-x-auto scrollbar-hide">
+                  <table className="w-full text-left table-fixed min-w-[800px]">
+                    <thead className="bg-slate-50/80 text-slate-400 font-black uppercase text-[9px] tracking-[0.2em] border-b border-slate-100">
+                      <tr>
+                        <th className="px-6 md:px-10 py-5 w-24 text-center">Cant.</th>
+                        <th className="px-6 md:px-10 py-5 w-1/3">Producto</th>
+                        <th className="px-6 md:px-10 py-5">Sección</th>
+                        <th className="px-6 md:px-10 py-5">Departamento</th>
+                        <th className="px-6 md:px-10 py-5 w-44">Fecha</th>
+                      </tr>
+                    </thead>
+                    <tbody className="text-slate-600 text-[11px] divide-y divide-slate-50/80">
+                      {filteredDelivery.map((d, idx) => (
+                        <tr key={idx} className="hover:bg-blue-50/20 transition-all duration-300 group">
+                          <td className="px-6 md:px-10 py-4 text-center">
+                            <span className="font-black text-slate-900 text-xs bg-slate-100/50 px-2.5 py-1 rounded-xl group-hover:bg-blue-100 transition-colors">{d.cantidad}</span>
+                          </td>
+                          <td className="px-6 md:px-10 py-4">
+                            <div className="font-black text-blue-600 uppercase tracking-tight group-hover:translate-x-1 transition-transform truncate">{d.producto}</div>
+                          </td>
+                          <td className="px-6 md:px-10 py-4">
+                            <div className="font-black text-slate-800 uppercase tracking-tight truncate bg-slate-50/50 px-3 py-1.5 rounded-xl inline-block max-w-full group-hover:bg-white transition-colors">{d.seccion}</div>
+                          </td>
+                          <td className="px-6 md:px-10 py-4">
+                            <div className="font-bold text-slate-500 uppercase tracking-widest truncate">{d.departamento}</div>
+                          </td>
+                          <td className="px-6 md:px-10 py-4">
+                            <span className="font-black text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-lg uppercase tracking-tighter whitespace-nowrap">{d.fecha}</span>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredDelivery.length === 0 && (
+                        <tr>
+                          <td colSpan={5} className="px-10 py-24 text-center">
+                            <div className="flex flex-col items-center opacity-40">
+                              <div className="bg-slate-100 p-6 rounded-full mb-4 transform transition-transform group-hover:scale-110"><ICONS.Search /></div>
+                              <p className="font-black text-slate-300 text-[12px] uppercase tracking-[0.5em]">Sin resultados históricos</p>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
         )}
 
         {activeSection === AppSection.SETTINGS && (
-          <div className="max-w-2xl bg-white p-10 rounded-[32px] shadow-sm border border-slate-100 animate-fade-in"><h3 className="text-xl font-bold text-slate-800 mb-8 uppercase tracking-widest">Origen de Datos</h3><div className="space-y-6"><div className="bg-slate-50 p-8 rounded-2xl border border-slate-100 text-center"><span className="text-blue-600 font-black text-2xl uppercase tracking-widest">Actualizado</span></div><button onClick={() => { syncData('inventory'); syncData('delivery'); }} disabled={isSyncing} className="w-full bg-blue-600 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-blue-700 transition-all disabled:opacity-50 text-[10px] uppercase tracking-widest">{isSyncing ? 'Conectando...' : 'Recargar Datos'}</button></div></div>
+          <div className="max-w-3xl mx-auto bg-white p-10 md:p-20 rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.03)] border border-slate-100 animate-fade-in relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-14 opacity-[0.03] transform scale-[4] rotate-12 pointer-events-none">
+              <ICONS.Settings />
+            </div>
+            <div className="relative">
+              <h3 className="text-2xl font-black text-slate-800 mb-10 uppercase tracking-[0.4em] opacity-80 flex items-center gap-5">
+                <div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-400"><ICONS.Settings /></div>
+                Sincronización
+              </h3>
+              <div className="space-y-10">
+                <div className="bg-slate-50/50 p-10 rounded-[32px] border border-slate-100/50 text-center relative group transition-all hover:bg-white hover:shadow-xl">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white px-5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg shadow-blue-200">Cloud Sync Active</div>
+                  <span className="text-blue-600 font-black text-4xl md:text-6xl uppercase tracking-tighter group-hover:scale-110 transition-transform block">Ready</span>
+                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mt-6">Protocolo de enlace verificado</p>
+                </div>
+                <button 
+                  onClick={() => { syncData('inventory'); syncData('delivery'); }} 
+                  disabled={isSyncing} 
+                  className="w-full relative group overflow-hidden bg-blue-600 text-white font-black py-7 rounded-[32px] shadow-2xl shadow-blue-200 hover:bg-blue-700 active:scale-[0.98] transition-all disabled:opacity-50 text-[11px] uppercase tracking-[0.5em]"
+                >
+                  <ShineEffect />
+                  <span className="relative z-10">{isSyncing ? 'Conectando con Servidores...' : 'Actualizar Inventario'}</span>
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </main>
 
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t px-2 py-3 flex justify-around items-center z-50 shadow-2xl">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-100/50 px-2 py-4 flex justify-around items-center z-50 shadow-[0_-10px_30px_rgba(0,0,0,0.05)] rounded-t-[32px]">
         {navItems.map((item) => (
-          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`relative flex flex-col items-center gap-1 min-w-[60px] transition-all ${activeSection === item.id ? 'text-blue-600 scale-110' : 'text-slate-400'}`}>
-            <div className={`${activeSection === item.id ? 'bg-blue-50 p-2 rounded-xl' : ''}`}>
+          <button key={item.id} onClick={() => setActiveSection(item.id)} className={`group relative overflow-hidden flex flex-col items-center gap-2 min-w-[64px] transition-all duration-300 ${activeSection === item.id ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
+            <ShineEffect />
+            <div className={`relative z-10 p-2.5 rounded-2xl transition-all duration-500 ${activeSection === item.id ? 'bg-blue-600 text-white shadow-lg shadow-blue-100 scale-110' : 'bg-transparent'}`}>
               {item.icon}
             </div>
-            <span className="text-[10px] font-bold uppercase tracking-tighter">{item.label}</span>
+            <span className={`relative z-10 text-[10px] font-black uppercase tracking-tighter transition-all ${activeSection === item.id ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>{item.label}</span>
             {item.id === AppSection.SOLICITUD && finalizedRequests.length > 0 && (
-              <span className="absolute -top-1 right-2 bg-rose-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-[8px] font-black border-2 border-white leading-none">
+              <span className={`absolute top-0 right-1 bg-rose-500 text-white w-5 h-5 flex items-center justify-center rounded-full text-[9px] font-black border-2 border-white leading-none shadow-md z-20 ${activeSection === item.id ? 'animate-none' : 'animate-bounce'}`}>
                 {finalizedRequests.length}
               </span>
             )}
