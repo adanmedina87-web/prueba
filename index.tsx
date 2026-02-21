@@ -110,6 +110,58 @@ const AnimatedTitle = ({ text }: { text: string }) => {
   );
 };
 
+const OrderMascot = ({ count, onClick }: { count: number; onClick: () => void }) => {
+  if (count === 0) return null;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.5, y: 100 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.5, y: 100 }}
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.95 }}
+      onClick={onClick}
+      className="fixed bottom-24 md:bottom-8 right-8 z-[60] cursor-pointer flex flex-col items-center group"
+    >
+      {/* Burbuja de texto opcional para reforzar el mensaje */}
+      <motion.div 
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+        className="bg-white px-4 py-2 rounded-2xl shadow-xl border border-slate-100 mb-2 relative group-hover:bg-blue-50 transition-colors"
+      >
+        <p className="text-[10px] font-black text-blue-600 uppercase tracking-widest">
+          {count > 5 ? "¡Muchos pedidos!" : `¡Tienes ${count} ${count === 1 ? 'pedido' : 'pedidos'}!`}
+        </p>
+        <div className="absolute -bottom-1 right-6 w-2 h-2 bg-white border-r border-b border-slate-100 rotate-45 group-hover:bg-blue-50 transition-colors"></div>
+      </motion.div>
+
+      <motion.img
+        src="https://i.pinimg.com/originals/e8/2c/cf/e82ccf423c7a73888d53de7277accda0.png"
+        alt="Mascota de Pedidos"
+        className="w-32 md:w-40 h-auto drop-shadow-2xl"
+        animate={count > 5 ? {
+          rotate: [0, -10, 10, -10, 10, 0],
+          transition: {
+            duration: 2,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }
+        } : {
+          y: [0, -20, 0],
+          rotate: [0, -5, 5, 0],
+          transition: {
+            duration: 1.5,
+            repeat: count,
+            repeatType: "loop",
+            ease: "easeInOut"
+          }
+        }}
+      />
+    </motion.div>
+  );
+};
+
 const CustomLogo = ({ trigger }: { trigger: any }) => (
   <div className="group relative overflow-hidden rounded-none p-0 transition-all duration-500 hover:bg-transparent flex items-center justify-center shrink-0">
     <img 
@@ -367,6 +419,7 @@ const App: React.FC = () => {
   });
   const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
   const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>([]);
+  const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
   useEffect(() => { localStorage.setItem('inv_v4_final', JSON.stringify(inventory)); }, [inventory]);
@@ -450,8 +503,24 @@ const App: React.FC = () => {
   const addItemToOrder = async (p: Product) => { if (p.quantity <= 0) { alert("SIN STOCK"); return; } const { departamento, seccion } = solicitudFilters; try { const existing = currentOrderItems.find(item => item.producto === p.name && item.seccion === seccion); if (existing && existing.id) { const itemRef = ref(db, `pedidos_temporales/${existing.id}`); await update(itemRef, { cantidad: existing.cantidad + 1 }); } else { const itemsRef = ref(db, "pedidos_temporales"); await push(itemsRef, { producto: p.name, cantidad: 1, departamento, seccion }); } } catch (err) { console.error("Add item error:", err); } };
   const updateItemQuantity = async (idx: number, delta: number) => { try { const item = currentOrderItems[idx]; if (!item || !item.id) return; if (delta > 0) { const productInInventory = inventory.find(p => p.name === item.producto); if (productInInventory && item.cantidad >= productInInventory.quantity) { alert("SIN STOCK"); return; } } const newVal = item.cantidad + delta; const itemRef = ref(db, `pedidos_temporales/${item.id}`); if (newVal <= 0) { await remove(itemRef); } else { await update(itemRef, { cantidad: newVal }); } } catch (err) { console.error("Update item error:", err); } };
   const finalizarPedido = async (e: React.MouseEvent) => { const { departamento, seccion } = solicitudFilters; if (!departamento.trim() || !seccion.trim()) return; const userItems = currentOrderItems.filter(i => i.seccion === seccion); if (userItems.length === 0) return; const fechaActual = new Date().toLocaleDateString('es-ES'); const newRequestData = { departamento: departamento.trim(), seccion: seccion.trim(), fecha: fechaActual, items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad })) }; try { const finalizedRef = ref(db, "solicitudes_finalizadas"); await push(finalizedRef, newRequestData); for (const item of userItems) { if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); } } setSolicitudFilters({ departamento: '', seccion: '' }); setSolicitudStep('cerrar'); } catch (err) { console.error("Error al finalizar:", err); } };
-  const handleConfirmOk = async (req: FinalizedRequest) => { try { const dataToSend = { departamento: req.departamento, seccion: req.seccion, items: req.items }; await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) }); const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`); await remove(reqRef); } catch (e) { console.error("Error procesando acción OK:", e); } };
-  const handleCancelRequest = async (reqId: string) => { try { const reqRef = ref(db, `solicitudes_finalizadas/${reqId}`); await remove(reqRef); } catch (e) { console.error("Error cancelando pedido:", e); } };
+  const handleConfirmOk = async (req: FinalizedRequest) => { 
+    if (!req.id) return;
+    try { 
+      const dataToSend = { departamento: req.departamento, seccion: req.seccion, items: req.items }; 
+      await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) }); 
+      const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`); 
+      await remove(reqRef); 
+      setExpandedRequestId(null);
+    } catch (e) { console.error("Error procesando acción OK:", e); } 
+  };
+  const handleCancelRequest = async (reqId: string) => { 
+    if (!reqId) return;
+    try { 
+      const reqRef = ref(db, `solicitudes_finalizadas/${reqId}`); 
+      await remove(reqRef); 
+      setExpandedRequestId(null);
+    } catch (e) { console.error("Error cancelando pedido:", e); } 
+  };
   const navItems = [ { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' }, { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' }, { id: AppSection.SOLICITUD, icon: <ICONS.Solicitud />, label: 'Solicitud' }, { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Historial' }, { id: AppSection.ORDER, icon: <ICONS.ShoppingBag />, label: 'PEDIR' }, ];
   const hasSolicitudFilters = !!(solicitudFilters.seccion && solicitudFilters.departamento);
   return (
@@ -484,11 +553,11 @@ const App: React.FC = () => {
         <div className="p-8 mt-auto"><div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center shadow-sm"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Sistema</p><div className="flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div><span className="text-[9px] font-black text-emerald-600 uppercase">En Línea</span></div></div></div>
       </aside>
       <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full transition-all duration-700 relative z-10`}>
-        <header className="flex flex-col mb-4 md:mb-6">
-          <div className="flex justify-between items-center mb-4">
+        <header className={`flex flex-col ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4 md:mb-6'}`}>
+          <div className={`flex justify-between items-center ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4'}`}>
             <div className="hidden md:block animate-fade-in w-full">
               <div className="flex flex-col items-center text-center md:-ml-36">
-                <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none mb-6 min-h-[1.2em] flex items-center justify-center">
+                <h2 className={`text-3xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none ${solicitudStep === 'cerrar' ? 'mb-2' : 'mb-6'} min-h-[1.2em] flex items-center justify-center`}>
                   {activeSection === AppSection.DASHBOARD && <AnimatedTitle text="Vista General" />}
                   {activeSection === AppSection.QUERY && <AnimatedTitle text="Consultas" />}
                   {activeSection === AppSection.SOLICITUD && (
@@ -562,7 +631,7 @@ const App: React.FC = () => {
                 )}
               </>
             ) : (
-              <div className="space-y-6 animate-fade-in">
+              <div className="space-y-3 animate-fade-in">
                 <div className="flex justify-start">
                   <button onClick={() => { setSolicitudStep('crear'); setSolicitudFilters({ departamento: '', seccion: '' }); }} className="group relative overflow-hidden text-blue-600 font-black text-[10px] uppercase tracking-widest bg-white px-6 py-3 rounded-2xl transition-all hover:bg-slate-50 active:scale-95 border border-slate-200 flex items-center gap-2 shadow-md">
                     <ShineEffect />
@@ -573,14 +642,67 @@ const App: React.FC = () => {
                   </button>
                 </div>
                 {finalizedRequests.length === 0 ? ( <div className="bg-white p-20 rounded-[48px] border border-slate-200 shadow-inner text-center flex flex-col items-center opacity-80"><div className="bg-slate-100 p-6 rounded-full mb-6 border border-slate-200 animate-pulse"><ICONS.Solicitud /></div><p className="font-black text-slate-400 text-[10px] uppercase tracking-[0.3em]">No hay pedidos pendientes de entrega</p></div> ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
-                    {finalizedRequests.map((req) => (
-                      <div key={req.id} className="group bg-white rounded-[40px] border border-slate-200 shadow-[0_15px_35px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col animate-fade-in transition-all duration-500 hover:shadow-[0_25px_50px_rgba(0,0,0,0.08)] hover:-translate-y-1">
-                        <div className="p-6 md:p-8 bg-emerald-50 border-b border-slate-100 relative overflow-hidden"><div className="absolute top-0 left-0 w-full h-1.5 bg-[#2e7d32]"></div><div className="flex justify-between items-center mb-4"><span className="bg-white px-3 py-1 rounded-lg font-black text-[9px] text-[#2e7d32] uppercase tracking-widest shadow-sm border border-emerald-100">#{req.id.split('-').pop()}</span><span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter bg-white/80 px-2 py-1 rounded-md">{req.fecha}</span></div><h4 className="font-black text-slate-800 text-lg md:text-xl uppercase leading-none tracking-tighter mb-1">{req.seccion}</h4><p className="text-[10px] font-black text-[#2e7d32] uppercase tracking-widest opacity-80 truncate">{req.departamento}</p></div>
-                        <div className="p-6 md:p-8 flex-1 space-y-3 bg-white">{req.items.map((item, idx) => ( <div key={idx} className="flex justify-between items-center text-[11px] font-black border-b border-slate-50 pb-2 group/item"><span className="text-slate-600 uppercase truncate pr-4 transition-colors group-hover/item:text-slate-900">{item.producto}</span><span className="text-[#2e7d32] bg-emerald-50 px-2.5 py-1 rounded-lg shadow-sm">x{item.cantidad}</span></div> ))}</div>
-                        <div className="p-6 md:p-8 bg-slate-50 border-t border-slate-100 flex gap-4"><button onClick={() => handleCancelRequest(req.id)} className="group relative overflow-hidden flex-1 bg-white text-rose-500 font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-sm hover:bg-rose-500 hover:text-white transition-all duration-300 border border-rose-200 active:scale-95"><ShineEffect /><span className="relative z-10">CANCELAR</span></button><button onClick={() => handleConfirmOk(req)} className="relative overflow-hidden group flex-1 bg-[#2e7d32] text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-[#1b5e20] active:scale-95 transition-all duration-300"><ShineEffect /><span className="relative z-10">OK</span></button></div>
-                      </div>
-                    ))}
+                  <div className={`grid gap-6 md:gap-8 ${expandedRequestId !== null ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
+                    {finalizedRequests.map((req) => {
+                      // Focus mode: if something is expanded, hide others
+                      if (expandedRequestId !== null && expandedRequestId !== req.id) return null;
+                      
+                      const isExpanded = expandedRequestId === req.id;
+                      
+                      return (
+                        <div key={req.id} className={`group bg-white rounded-[40px] border border-slate-200 shadow-[0_15px_35px_rgba(0,0,0,0.04)] overflow-hidden flex flex-col animate-fade-in transition-all duration-500 ${!isExpanded ? 'hover:shadow-[0_25px_50px_rgba(0,0,0,0.08)]' : ''}`}>
+                          <div 
+                            onClick={() => setExpandedRequestId(isExpanded ? null : req.id)}
+                            className="p-6 md:p-8 bg-emerald-50 border-b border-slate-100 relative overflow-hidden cursor-pointer group/header"
+                          >
+                            <div className="absolute top-0 left-0 w-full h-1.5 bg-[#2e7d32]"></div>
+                            <div className="flex justify-between items-center mb-4">
+                              <span className="bg-white px-3 py-1 rounded-lg font-black text-[9px] text-[#2e7d32] uppercase tracking-widest shadow-sm border border-emerald-100">#{req.id.split('-').pop()}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter bg-white/80 px-2 py-1 rounded-md">{req.fecha}</span>
+                                <motion.div 
+                                  animate={{ rotate: isExpanded ? 180 : 0 }}
+                                  className="text-emerald-600"
+                                >
+                                  <ICONS.ChevronDown />
+                                </motion.div>
+                              </div>
+                            </div>
+                            <h4 className="font-black text-slate-800 text-lg md:text-xl uppercase leading-none tracking-tighter mb-1">{req.seccion}</h4>
+                            <p className="text-[10px] font-black text-[#2e7d32] uppercase tracking-widest opacity-80 truncate">{req.departamento}</p>
+                          </div>
+                          
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.3, ease: "easeInOut" }}
+                                className="overflow-hidden"
+                              >
+                                <div className="p-6 md:p-8 space-y-3 bg-white border-t border-slate-50">
+                                  {req.items.map((item, i) => ( 
+                                    <div key={i} className="flex justify-between items-center text-[11px] font-black border-b border-slate-50 pb-2 group/item">
+                                      <span className="text-slate-600 uppercase truncate pr-4 transition-colors group-hover/item:text-slate-900">{item.producto}</span>
+                                      <span className="text-[#2e7d32] bg-emerald-50 px-2.5 py-1 rounded-lg shadow-sm">x{item.cantidad}</span>
+                                    </div> 
+                                  ))}
+                                </div>
+                                <div className="p-6 md:p-8 bg-slate-50 border-t border-slate-100 flex gap-4">
+                                  <button onClick={(e) => { e.stopPropagation(); handleCancelRequest(req.id); }} className="group relative overflow-hidden flex-1 bg-white text-rose-500 font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-sm hover:bg-rose-500 hover:text-white transition-all duration-300 border border-rose-200 active:scale-95">
+                                    <ShineEffect /><span className="relative z-10">CANCELAR</span>
+                                  </button>
+                                  <button onClick={(e) => { e.stopPropagation(); handleConfirmOk(req); }} className="relative overflow-hidden group flex-1 bg-[#2e7d32] text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-xl shadow-emerald-200 hover:bg-[#1b5e20] active:scale-95 transition-all duration-300">
+                                    <ShineEffect /><span className="relative z-10">OK</span>
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -655,6 +777,14 @@ const App: React.FC = () => {
           </button>
         ))}
       </nav>
+      <AnimatePresence>
+        {activeSection === AppSection.SOLICITUD && solicitudStep === 'crear' && !hasSolicitudFilters && finalizedRequests.length > 0 && (
+          <OrderMascot 
+            count={finalizedRequests.length} 
+            onClick={() => setSolicitudStep('cerrar')}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 };
