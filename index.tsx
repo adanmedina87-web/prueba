@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { createRoot } from 'react-dom/client';
 // Fix: Use standard modular named import for Firebase v9+ initializeApp
 import { initializeApp } from "firebase/app";
@@ -79,6 +80,35 @@ enum AppSection {
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?gid=507872400#gid=507872400';
 const DELIVERY_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?usp=sharing';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9R2ocvOKfUpf78kVjZxG9EL5tbGxqtvu2Y-YeM7ADGbA41JdHdJ0GRmCJ3Qh8-LY/exec';
+
+const AnimatedTitle = ({ text }: { text: string }) => {
+  const characters = text.split("");
+  
+  return (
+    <motion.span layout className="inline-flex flex-wrap justify-center">
+      <AnimatePresence mode="popLayout">
+        {characters.map((char, index) => (
+          <motion.span
+            key={`${char}-${index}`}
+            initial={{ opacity: 0, y: 10, filter: "blur(4px)" }}
+            animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+            exit={{ opacity: 0, scale: 0.8, filter: "blur(4px)" }}
+            transition={{ 
+              duration: 0.3, 
+              delay: index * 0.03,
+              type: "spring",
+              stiffness: 200,
+              damping: 20
+            }}
+            className={char === " " ? "w-2" : ""}
+          >
+            {char}
+          </motion.span>
+        ))}
+      </AnimatePresence>
+    </motion.span>
+  );
+};
 
 const CustomLogo = ({ trigger }: { trigger: any }) => (
   <div className="group relative overflow-hidden rounded-none p-0 transition-all duration-500 hover:bg-transparent flex items-center justify-center shrink-0">
@@ -458,12 +488,22 @@ const App: React.FC = () => {
           <div className="flex justify-between items-center mb-4">
             <div className="hidden md:block animate-fade-in w-full">
               <div className="flex flex-col items-center text-center md:-ml-36">
-                <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none mb-6">
-                  {activeSection === AppSection.DASHBOARD && 'Vista General'}
-                  {activeSection === AppSection.QUERY && 'Consultas'}
-                  {activeSection === AppSection.SOLICITUD && (hasSolicitudFilters ? `SOLICITUD ${solicitudFilters.departamento.toUpperCase()} ${solicitudFilters.seccion.toUpperCase()}` : 'SOLICITUD')}
-                  {activeSection === AppSection.ENTREGA && 'Historial'}
-                  {activeSection === AppSection.ORDER && 'LISTA PRIORITARIA'}
+                <h2 className="text-3xl md:text-4xl font-black text-white tracking-tighter uppercase leading-none mb-6 min-h-[1.2em] flex items-center justify-center">
+                  {activeSection === AppSection.DASHBOARD && <AnimatedTitle text="Vista General" />}
+                  {activeSection === AppSection.QUERY && <AnimatedTitle text="Consultas" />}
+                  {activeSection === AppSection.SOLICITUD && (
+                    <AnimatedTitle 
+                      text={
+                        solicitudStep === 'cerrar'
+                          ? 'LISTA DE PEDIDOS'
+                          : (hasSolicitudFilters 
+                              ? `SOLICITUD ${solicitudFilters.departamento.toUpperCase()} ${solicitudFilters.seccion.toUpperCase()}` 
+                              : 'SOLICITUD')
+                      } 
+                    />
+                  )}
+                  {activeSection === AppSection.ENTREGA && <AnimatedTitle text="Historial" />}
+                  {activeSection === AppSection.ORDER && <AnimatedTitle text="LISTA PRIORITARIA" />}
                 </h2>
                 {activeSection === AppSection.SOLICITUD && hasSolicitudFilters && solicitudStep === 'crear' && (
                   <div className="flex gap-4 mb-4">
