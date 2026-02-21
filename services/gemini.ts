@@ -23,6 +23,7 @@ export const getInventoryInsights = async (query: string, inventory: Product[]) 
       },
     });
 
+    // Access the .text property directly
     return response.text;
   } catch (error) {
     console.error("Gemini API Error:", error);
@@ -37,8 +38,9 @@ export const getCalendarEvents = async (calendarUrl: string) => {
     const monthStr = now.toLocaleDateString('es-ES', { month: 'long' });
     const year = now.getFullYear();
 
+    // Use gemini-3-pro-preview for complex reasoning/parsing tasks using tools
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-3-pro-preview",
       contents: `Analiza el calendario en formato iCal (.ics) en la URL: ${calendarUrl}. 
       Hoy es ${todayStr}.
       
@@ -58,9 +60,19 @@ export const getCalendarEvents = async (calendarUrl: string) => {
       }
     });
 
-    return response.text?.trim() || "SIN ACTIVIDADES EN LO QUE RESTA DE MES";
+    // Mandatory: Extract grounding metadata URLs when using googleSearch
+    const text = response.text?.trim() || "SIN ACTIVIDADES EN LO QUE RESTA DE MES";
+    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    const sources = groundingChunks
+      .map((chunk: any) => ({
+        title: chunk.web?.title || chunk.web?.uri,
+        uri: chunk.web?.uri
+      }))
+      .filter((s: any) => s.uri);
+
+    return { text, sources };
   } catch (error) {
     console.error("Error fetching calendar:", error);
-    return "SIN ACTIVIDADES EN LO QUE RESTA DE MES";
+    return { text: "SIN ACTIVIDADES EN LO QUE RESTA DE MES", sources: [] };
   }
 };

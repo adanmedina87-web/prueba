@@ -8,6 +8,7 @@ export interface Product {
   arrivalDate: string; // ISO string
   responsible: string;
   sku: string;
+  minStock?: number;
 }
 
 export interface InventoryState {
@@ -20,5 +21,5 @@ export enum AppSection {
   DASHBOARD = 'DASHBOARD',
   QUERY = 'QUERY',
   INVENTORY = 'INVENTORY',
-  SETTINGS = 'SETTINGS'
+  ORDER = 'ORDER'
 }
