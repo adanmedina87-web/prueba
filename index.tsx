@@ -137,9 +137,9 @@ const OrderMascot = ({ count, onClick }: { count: number; onClick: () => void })
       </motion.div>
 
       <motion.img
-        src="https://i.pinimg.com/originals/e8/2c/cf/e82ccf423c7a73888d53de7277accda0.png"
-        alt="Mascota de Pedidos"
-        className="w-32 md:w-40 h-auto drop-shadow-2xl"
+        src="https://cdn-icons-png.flaticon.com/512/2666/2666505.png"
+        alt="Lista de Pedidos"
+        className="w-32 md:w-40 h-32 md:h-40 object-contain scale-110"
         animate={count > 5 ? {
           rotate: [0, -10, 10, -10, 10, 0],
           transition: {
@@ -375,18 +375,19 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
   return (
     <div className="relative w-full" ref={containerRef}>
       <div className="relative group">
-        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => query.trim().length > 0 && setIsOpen(true)} placeholder={placeholder || "¿Qué producto buscas?"} className="w-full px-4 py-3 md:px-5 md:py-3.5 pl-12 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight" />
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-blue-500"><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg></div>
+        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => query.trim().length > 0 && setIsOpen(true)} placeholder={placeholder || "¿Qué producto buscas?"} className="w-full px-4 py-3 md:px-5 md:py-3.5 pl-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight" />
       </div>
       {isOpen && suggestions.length > 0 && (
         <ul className="absolute z-[100] w-full mt-3 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] overflow-hidden divide-y divide-slate-50 max-h-[340px] overflow-y-auto animate-fade-in scrollbar-hide">
           {suggestions.map((p) => (
             <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50/80 cursor-pointer flex justify-between items-center transition-all i-active:bg-blue-100 group">
               <div className="flex items-center gap-4 flex-1 pr-3 truncate">
-                {p.imageUrl && (
+                {p.imageUrl ? (
                   <div className="relative shrink-0 overflow-hidden rounded-lg shadow-sm border border-slate-100">
                     <img src={formatImageUrl(p.imageUrl)} alt={p.name} className="w-11 h-11 object-cover transform transition-transform duration-500 group-hover:scale-110" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} />
                   </div>
+                ) : (
+                  <div className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-lg border border-slate-200 text-[8px] font-black text-slate-400 uppercase text-center leading-tight">Sin imagen</div>
                 )}
                 <div className="min-w-0"><p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p></div>
               </div>
@@ -421,7 +422,21 @@ const App: React.FC = () => {
   const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>([]);
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [stockError, setStockError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  useEffect(() => {
+    if (activeSection !== AppSection.QUERY) {
+      setSelectedProduct(null);
+    }
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (stockError) {
+      const timer = setTimeout(() => setStockError(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [stockError]);
   useEffect(() => { localStorage.setItem('inv_v4_final', JSON.stringify(inventory)); }, [inventory]);
   useEffect(() => { localStorage.setItem('inv_link_v4_final', sourceLink); }, [sourceLink]);
   useEffect(() => { localStorage.setItem('del_v4_final', JSON.stringify(deliveryData)); }, [deliveryData]);
@@ -500,8 +515,8 @@ const App: React.FC = () => {
   const handleSolicitanteSeccionChange = (val: string) => { const trimmedVal = val.trim(); setSolicitudFilters(prev => { const newState = { ...prev, seccion: val }; if (trimmedVal !== '') { const match = [...deliveryData].reverse().find(d => d.seccion && d.seccion.trim().toLowerCase() === trimmedVal.toLowerCase()); if (match) { newState.departamento = match.departamento || prev.departamento; } } return newState; }); };
   const clearTemporaryOrders = async () => { try { const itemsRef = ref(db, "pedidos_temporales"); await remove(itemsRef); } catch (err) { console.error("Error clearing orders:", err); } };
   const loadPreviousOrder = async () => { const seccionName = solicitudFilters.seccion.trim().toLowerCase(); if (!seccionName) return; const seccionDeliveries = deliveryData.filter(d => d.seccion.trim().toLowerCase() === seccionName); if (seccionDeliveries.length === 0) return; const sorted = [...seccionDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); const latestDate = sorted[0].fecha; const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate); await clearTemporaryOrders(); const itemsRef = ref(db, "pedidos_temporales"); const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, { producto: item.producto, cantidad: item.cantidad, departamento: solicitudFilters.departamento, seccion: solicitudFilters.seccion })); await Promise.all(addPromises); };
-  const addItemToOrder = async (p: Product) => { if (p.quantity <= 0) { alert("SIN STOCK"); return; } const { departamento, seccion } = solicitudFilters; try { const existing = currentOrderItems.find(item => item.producto === p.name && item.seccion === seccion); if (existing && existing.id) { const itemRef = ref(db, `pedidos_temporales/${existing.id}`); await update(itemRef, { cantidad: existing.cantidad + 1 }); } else { const itemsRef = ref(db, "pedidos_temporales"); await push(itemsRef, { producto: p.name, cantidad: 1, departamento, seccion }); } } catch (err) { console.error("Add item error:", err); } };
-  const updateItemQuantity = async (idx: number, delta: number) => { try { const item = currentOrderItems[idx]; if (!item || !item.id) return; if (delta > 0) { const productInInventory = inventory.find(p => p.name === item.producto); if (productInInventory && item.cantidad >= productInInventory.quantity) { alert("SIN STOCK"); return; } } const newVal = item.cantidad + delta; const itemRef = ref(db, `pedidos_temporales/${item.id}`); if (newVal <= 0) { await remove(itemRef); } else { await update(itemRef, { cantidad: newVal }); } } catch (err) { console.error("Update item error:", err); } };
+  const addItemToOrder = async (p: Product) => { if (p.quantity <= 0) { setStockError(p.name); return; } const { departamento, seccion } = solicitudFilters; try { const existing = currentOrderItems.find(item => item.producto === p.name && item.seccion === seccion); if (existing && existing.id) { const itemRef = ref(db, `pedidos_temporales/${existing.id}`); await update(itemRef, { cantidad: existing.cantidad + 1 }); } else { const itemsRef = ref(db, "pedidos_temporales"); await push(itemsRef, { producto: p.name, cantidad: 1, departamento, seccion }); } } catch (err) { console.error("Add item error:", err); } };
+  const updateItemQuantity = async (idx: number, delta: number) => { try { const item = currentOrderItems[idx]; if (!item || !item.id) return; if (delta > 0) { const productInInventory = inventory.find(p => p.name === item.producto); if (productInInventory && item.cantidad >= productInInventory.quantity) { setStockError(item.producto); return; } } const newVal = item.cantidad + delta; const itemRef = ref(db, `pedidos_temporales/${item.id}`); if (newVal <= 0) { await remove(itemRef); } else { await update(itemRef, { cantidad: newVal }); } } catch (err) { console.error("Update item error:", err); } };
   const finalizarPedido = async (e: React.MouseEvent) => { const { departamento, seccion } = solicitudFilters; if (!departamento.trim() || !seccion.trim()) return; const userItems = currentOrderItems.filter(i => i.seccion === seccion); if (userItems.length === 0) return; const fechaActual = new Date().toLocaleDateString('es-ES'); const newRequestData = { departamento: departamento.trim(), seccion: seccion.trim(), fecha: fechaActual, items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad })) }; try { const finalizedRef = ref(db, "solicitudes_finalizadas"); await push(finalizedRef, newRequestData); for (const item of userItems) { if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); } } setSolicitudFilters({ departamento: '', seccion: '' }); setSolicitudStep('cerrar'); } catch (err) { console.error("Error al finalizar:", err); } };
   const handleConfirmOk = async (req: FinalizedRequest) => { 
     if (!req.id) return;
@@ -748,11 +763,11 @@ const App: React.FC = () => {
         )}
         {activeSection === AppSection.ORDER && (
           <div className="animate-fade-in space-y-6">
-            <div className="bg-white p-6 md:p-10 rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.05)] border border-slate-200 relative overflow-hidden">
+            <div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_70px_rgba(0,0,0,0.05)] border border-slate-200 relative overflow-hidden">
                <div className="absolute top-0 right-0 p-14 opacity-[0.04] transform scale-[4] rotate-12 pointer-events-none text-blue-600"><ICONS.ShoppingBag /></div>
-               <div className="relative"><div className="text-2xl font-black text-slate-800 mb-6 uppercase tracking-[0.4em] opacity-80 flex items-center gap-5"><div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500"><ICONS.ShoppingBag /></div>LISTA PRIORITARIA</div>{lowStockItems.length === 0 ? ( <div className="bg-slate-50 p-20 rounded-[40px] border border-dashed border-slate-300 text-center"><p className="font-black text-slate-400 text-sm uppercase tracking-[0.3em]">Todo en orden. No hay productos con stock crítico.</p></div> ) : (
+               <div className="relative"><div className="text-2xl font-black text-slate-800 mb-6 uppercase tracking-[0.4em] opacity-80 flex items-center gap-5"><div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500"><ICONS.ShoppingBag /></div>LISTA PRIORITARIA</div>{lowStockItems.length === 0 ? ( <div className="bg-slate-50 p-6 rounded-[20px] border border-dashed border-slate-300 text-center"><p className="font-black text-slate-400 text-[9px] uppercase tracking-[0.3em]">Todo en orden. No hay productos con stock crítico.</p></div> ) : (
                    <div className="space-y-4">
-                     {lowStockItems.map((item) => {
+                     {lowStockItems.map((item, idx) => {
                        let statusLabel = "ATENCIÓN"; let statusColor = "bg-[#0d47a1]";
                        if (item.quantity === 0) { statusLabel = "CRÍTICO"; statusColor = "bg-[#b71c1c]"; } else if (item.quantity < item.minStock) { statusLabel = "URGENTE"; statusColor = "bg-[#e65100]"; }
                        return (
@@ -783,6 +798,25 @@ const App: React.FC = () => {
             count={finalizedRequests.length} 
             onClick={() => setSolicitudStep('cerrar')}
           />
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {stockError && (
+          <motion.div
+            initial={{ opacity: 0, y: 50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: 50, x: '-50%' }}
+            className="fixed bottom-28 md:bottom-10 left-1/2 z-[100] pointer-events-none"
+          >
+            <div className="bg-rose-500 text-white px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-3 border border-rose-400">
+              <div className="bg-white/20 p-1.5 rounded-lg"><ICONS.ShoppingBag /></div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black uppercase tracking-widest leading-none">Sin Stock Disponible</span>
+                <span className="text-[11px] font-black uppercase tracking-tight mt-1 opacity-90">{stockError}</span>
+              </div>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>
