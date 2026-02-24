@@ -85,8 +85,8 @@ const AnimatedTitle = ({ text }: { text: string }) => {
   const characters = text.split("");
   
   return (
-    <motion.span layout className="inline-flex flex-wrap justify-center">
-      <AnimatePresence mode="popLayout">
+    <motion.span className="inline-flex flex-wrap justify-center">
+      <AnimatePresence>
         {characters.map((char, index) => (
           <motion.span
             key={`${char}-${index}`}
@@ -169,7 +169,7 @@ const CustomLogo = ({ trigger }: { trigger: any }) => (
       src="https://appsiomaristas.cl/public/img/logoIOR.png" 
       alt="Logo Maristas IOR"
       referrerPolicy="no-referrer"
-      className="relative w-36 h-36 md:w-48 md:h-48 object-contain transform transition-transform duration-500 hover:scale-105 animate-rotate border-none outline-none shadow-none bg-transparent"
+      className="relative w-36 h-36 md:w-48 md:h-48 object-contain transform transition-transform duration-500 animate-rotate border-none outline-none shadow-none bg-transparent"
       onError={(e) => {
         e.currentTarget.src = "https://instituto-ohiggins.cl/wp-content/uploads/2021/04/logo-maristas-rancagua.png";
       }}
@@ -382,13 +382,6 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
           {suggestions.map((p) => (
             <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50/80 cursor-pointer flex justify-between items-center transition-all i-active:bg-blue-100 group">
               <div className="flex items-center gap-4 flex-1 pr-3 truncate">
-                {p.imageUrl ? (
-                  <div className="relative shrink-0 overflow-hidden rounded-lg shadow-sm border border-slate-100">
-                    <img src={formatImageUrl(p.imageUrl)} alt={p.name} className="w-11 h-11 object-cover transform transition-transform duration-500 group-hover:scale-110" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} />
-                  </div>
-                ) : (
-                  <div className="w-11 h-11 shrink-0 flex items-center justify-center bg-slate-100 rounded-lg border border-slate-200 text-[8px] font-black text-slate-400 uppercase text-center leading-tight">Sin imagen</div>
-                )}
                 <div className="min-w-0"><p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p></div>
               </div>
               <div className="flex items-center gap-3 shrink-0"><span className="text-[10px] font-black text-blue-600 bg-blue-100/50 px-3 py-1.5 rounded-lg shadow-sm shrink-0">STOCK: {p.quantity}</span><div className="bg-blue-600 text-white p-2 rounded-xl shadow-md group-hover:rotate-90 transition-transform duration-300"><ICONS.Plus /></div></div>
@@ -522,7 +515,7 @@ const App: React.FC = () => {
     if (!req.id) return;
     try { 
       const dataToSend = { departamento: req.departamento, seccion: req.seccion, items: req.items }; 
-      await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(dataToSend) }); 
+      await fetch(APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: JSON.stringify(dataToSend) }); 
       const reqRef = ref(db, `solicitudes_finalizadas/${req.id}`); 
       await remove(reqRef); 
       setExpandedRequestId(null);
@@ -541,7 +534,7 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#f2f2f2] pb-24 md:pb-0 font-['Plus_Jakarta_Sans'] selection:bg-blue-100 selection:text-blue-900 relative overflow-hidden">
       {/* Banner Superior Decorativo - Fijo y sin degradado de opacidad */}
-      <div className="fixed top-0 left-0 right-0 h-40 md:h-64 -z-0 overflow-hidden pointer-events-none">
+      <div className="fixed top-0 left-0 right-0 h-40 md:h-64 z-0 overflow-hidden pointer-events-none">
         <img 
           src="https://io.maristas.cl/public/img/ioh/background-seccion1.jpg" 
           alt="Banner Decorativo"
@@ -567,7 +560,7 @@ const App: React.FC = () => {
         </nav>
         <div className="p-8 mt-auto"><div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center shadow-sm"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Sistema</p><div className="flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div><span className="text-[9px] font-black text-emerald-600 uppercase">En Línea</span></div></div></div>
       </aside>
-      <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full transition-all duration-700 relative z-10`}>
+      <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full relative z-10`}>
         <header className={`flex flex-col ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4 md:mb-6'}`}>
           <div className={`flex justify-between items-center ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4'}`}>
             <div className="hidden md:block animate-fade-in w-full">
