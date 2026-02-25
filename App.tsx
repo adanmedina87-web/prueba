@@ -5,7 +5,7 @@ import { INITIAL_INVENTORY, ICONS } from './constants';
 import { AutocompleteSearch } from './components/AutocompleteSearch';
 import { getInventoryInsights, getCalendarEvents } from './services/gemini';
 
-const CALENDAR_URL = 'https://calendar.google.com/calendar/embed?src=maristas.cl_nibj9c200dlhn4ikddt9g41lgg%40group.calendar.google.com&ctz=America%2FSantiago';
+const CALENDAR_URL = 'https://calendar.google.com/calendar/embed?src=test';
 
 const ShineEffect = () => (
   <div className="absolute inset-0 w-1/2 h-full bg-white/10 skew-x-[45deg] -translate-x-full group-hover:translate-x-[250%] transition-transform duration-1000 pointer-events-none"></div>

@@ -347,8 +347,13 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
   );
 };
 
-const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product) => void, placeholder?: string }> = ({ products, onSelect, placeholder }) => {
-  const [query, setQuery] = useState('');
+const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product) => void, placeholder?: string, value?: string, onChange?: (val: string) => void, inputClassName?: string }> = ({ products, onSelect, placeholder, value, onChange, inputClassName }) => {
+  const [internalQuery, setInternalQuery] = useState('');
+  const query = value !== undefined ? value : internalQuery;
+  const setQuery = (val: string) => {
+    setInternalQuery(val);
+    if (onChange) onChange(val);
+  };
   const [suggestions, setSuggestions] = useState<Product[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -375,12 +380,12 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
   return (
     <div className="relative w-full" ref={containerRef}>
       <div className="relative group">
-        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => query.trim().length > 0 && setIsOpen(true)} placeholder={placeholder || "¿Qué producto buscas?"} className="w-full px-4 py-3 md:px-5 md:py-3.5 pl-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight" />
+        <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => query.trim().length > 0 && setIsOpen(true)} placeholder={placeholder || "¿Qué producto buscas?"} className={inputClassName || "w-full px-4 py-3 md:px-5 md:py-3.5 pl-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight"} />
       </div>
       {isOpen && suggestions.length > 0 && (
         <ul className="absolute z-[100] w-full mt-3 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] overflow-hidden divide-y divide-slate-50 max-h-[340px] overflow-y-auto animate-fade-in scrollbar-hide">
           {suggestions.map((p) => (
-            <li key={p.id} onClick={() => { onSelect(p); setQuery(''); setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50/80 cursor-pointer flex justify-between items-center transition-all i-active:bg-blue-100 group">
+            <li key={p.id} onClick={() => { onSelect(p); if (value !== undefined) { setQuery(p.name); } else { setQuery(''); } setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50/80 cursor-pointer flex justify-between items-center transition-all i-active:bg-blue-100 group">
               <div className="flex items-center gap-4 flex-1 pr-3 truncate">
                 <div className="min-w-0"><p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p></div>
               </div>
@@ -405,7 +410,7 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('del_v4_final');
     return saved ? JSON.parse(saved) : [];
   });
-  const [deliveryFilters, setDeliveryFilters] = useState({ seccion: '', departamento: '', fechaInicio: '', fechaFin: '' });
+  const [deliveryFilters, setDeliveryFilters] = useState({ seccion: '', departamento: '', fechaInicio: '', fechaFin: '', producto: '' });
   const [solicitudStep, setSolicitudStep] = useState<'crear' | 'cerrar'>('crear');
   const [solicitudFilters, setSolicitudFilters] = useState(() => {
     const saved = localStorage.getItem('solicitud_filters_v14');
@@ -503,8 +508,8 @@ const App: React.FC = () => {
   const lowStockItems = useMemo(() => { const filtered = inventory.filter(p => p.minStock > 0 && p.quantity <= p.minStock); const getWeight = (p: Product) => { if (p.quantity === 0) return 0; if (p.quantity < p.minStock) return 1; return 2; }; return filtered.sort((a, b) => getWeight(a) - getWeight(b)); }, [inventory]);
   const allPossibleDeptos = useMemo(() => { const set = new Set<string>(); deliveryData.forEach(d => { if(d.departamento) set.add(d.departamento); }); return Array.from(set).filter(Boolean).sort(); }, [deliveryData]);
   const allPossibleSecciones = useMemo(() => { const set = new Set<string>(); deliveryData.forEach(d => { if(d.seccion) set.add(d.seccion); }); return Array.from(set).filter(Boolean).sort(); }, [deliveryData]);
-  const filteredDelivery = useMemo(() => { return deliveryData.filter(d => { const matchSeccion = !deliveryFilters.seccion || (d.seccion && d.seccion.toLowerCase().includes(deliveryFilters.seccion.toLowerCase())); const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento; const itemDate = getNormalizedTimestamp(d.fecha); if (!itemDate) return matchSeccion && matchDepto; const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio).getTime() : null; const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin).getTime() : null; return matchSeccion && matchDepto && (!start || itemDate >= start) && (!end || itemDate <= end); }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); }, [deliveryData, deliveryFilters]);
-  const isDeliveryFilterActive = useMemo(() => { return !!(deliveryFilters.seccion.trim() || deliveryFilters.departamento || deliveryFilters.fechaInicio || deliveryFilters.fechaFin); }, [deliveryFilters]);
+  const filteredDelivery = useMemo(() => { return deliveryData.filter(d => { const matchSeccion = !deliveryFilters.seccion || (d.seccion && d.seccion.toLowerCase().includes(deliveryFilters.seccion.toLowerCase())); const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento; const matchProducto = !deliveryFilters.producto || (d.producto && d.producto.toLowerCase().includes(deliveryFilters.producto.toLowerCase())); const itemDate = getNormalizedTimestamp(d.fecha); if (!itemDate) return matchSeccion && matchDepto && matchProducto; const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio).getTime() : null; const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin).getTime() : null; return matchSeccion && matchDepto && matchProducto && (!start || itemDate >= start) && (!end || itemDate <= end); }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); }, [deliveryData, deliveryFilters]);
+  const isDeliveryFilterActive = useMemo(() => { return !!(deliveryFilters.seccion.trim() || deliveryFilters.departamento || deliveryFilters.producto || deliveryFilters.fechaInicio || deliveryFilters.fechaFin); }, [deliveryFilters]);
   const handleSolicitanteSeccionChange = (val: string) => { const trimmedVal = val.trim(); setSolicitudFilters(prev => { const newState = { ...prev, seccion: val }; if (trimmedVal !== '') { const match = [...deliveryData].reverse().find(d => d.seccion && d.seccion.trim().toLowerCase() === trimmedVal.toLowerCase()); if (match) { newState.departamento = match.departamento || prev.departamento; } } return newState; }); };
   const clearTemporaryOrders = async () => { try { const itemsRef = ref(db, "pedidos_temporales"); await remove(itemsRef); } catch (err) { console.error("Error clearing orders:", err); } };
   const loadPreviousOrder = async () => { const seccionName = solicitudFilters.seccion.trim().toLowerCase(); if (!seccionName) return; const seccionDeliveries = deliveryData.filter(d => d.seccion.trim().toLowerCase() === seccionName); if (seccionDeliveries.length === 0) return; const sorted = [...seccionDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); const latestDate = sorted[0].fecha; const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate); await clearTemporaryOrders(); const itemsRef = ref(db, "pedidos_temporales"); const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, { producto: item.producto, cantidad: item.cantidad, departamento: solicitudFilters.departamento, seccion: solicitudFilters.seccion })); await Promise.all(addPromises); };
@@ -721,14 +726,15 @@ const App: React.FC = () => {
           <div className="animate-fade-in space-y-6 md:space-y-8">
             <div className="bg-white p-3 md:p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.03)] border border-slate-200 transition-all hover:shadow-[0_25px_50px_rgba(0,0,0,0.06)]">
                <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2"><h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.3em] opacity-70">Panel de Filtrado Avanzado</h3></div>
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Producto</label><AutocompleteSearch products={inventory} onSelect={(p) => setDeliveryFilters({...deliveryFilters, producto: p.name})} value={deliveryFilters.producto} onChange={(val) => setDeliveryFilters({...deliveryFilters, producto: val})} placeholder="Buscar producto..." inputClassName="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /></div>
                   <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección</label><input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /><datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist></div>
                   <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento Destino</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm"><option value="">TODOS LOS DEPTOS</option>{allPossibleDeptos.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
-                  <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                  <div className="grid grid-cols-2 gap-4 md:col-span-3">
                     <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Inicial</label><input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
                     <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Límite</label><input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
                   </div>
-                  <div className="md:col-span-2 pt-2"><button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: ''})} className="relative overflow-hidden group w-full py-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all hover:bg-rose-500 hover:text-white shadow-sm active:scale-[0.99]"><ShineEffect /><span className="relative z-10">REINICIAR FILTROS</span></button></div>
+                  <div className="md:col-span-3 pt-2"><button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: '', producto: ''})} className="relative overflow-hidden group w-full py-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all hover:bg-rose-500 hover:text-white shadow-sm active:scale-[0.99]"><ShineEffect /><span className="relative z-10">REINICIAR FILTROS</span></button></div>
                </div>
             </div>
             {isDeliveryFilterActive && (
