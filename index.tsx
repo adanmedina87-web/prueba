@@ -419,6 +419,11 @@ const App: React.FC = () => {
   const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
   const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>([]);
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
+  useEffect(() => {
+    if (expandedRequestId && !finalizedRequests.some(r => r.id === expandedRequestId)) {
+      setExpandedRequestId(null);
+    }
+  }, [finalizedRequests, expandedRequestId]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
