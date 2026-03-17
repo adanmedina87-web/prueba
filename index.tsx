@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import './index.css';
 import { motion, AnimatePresence } from 'motion/react';
 import { createRoot } from 'react-dom/client';
 // Fix: Use standard modular named import for Firebase v9+ initializeApp
@@ -41,6 +42,7 @@ interface Product {
   link: string; 
   imageUrl?: string; 
   minStock: number; 
+  valor?: string;
 }
 
 interface DeliveryRecord {
@@ -65,6 +67,7 @@ interface FinalizedRequest {
   departamento: string;
   seccion: string;
   fecha: string;
+  hora?: string;
   items: { producto: string; cantidad: number }[];
 }
 
@@ -347,7 +350,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
   );
 };
 
-const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product) => void, placeholder?: string, value?: string, onChange?: (val: string) => void, inputClassName?: string }> = ({ products, onSelect, placeholder, value, onChange, inputClassName }) => {
+const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product) => void, placeholder?: string, value?: string, onChange?: (val: string) => void, inputClassName?: string, showValor?: boolean }> = ({ products, onSelect, placeholder, value, onChange, inputClassName, showValor }) => {
   const [internalQuery, setInternalQuery] = useState('');
   const query = value !== undefined ? value : internalQuery;
   const setQuery = (val: string) => {
@@ -387,12 +390,118 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
           {suggestions.map((p) => (
             <li key={p.id} onClick={() => { onSelect(p); if (value !== undefined) { setQuery(p.name); } else { setQuery(''); } setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50/80 cursor-pointer flex justify-between items-center transition-all i-active:bg-blue-100 group">
               <div className="flex items-center gap-4 flex-1 pr-3 truncate">
-                <div className="min-w-0"><p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p></div>
+                <div className="min-w-0">
+                  <p className="font-bold text-slate-800 text-sm uppercase tracking-tight truncate group-hover:text-blue-600 transition-colors">{p.name}</p>
+                  {showValor && <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mt-0.5">Valor: {p.valor || 'N/A'}</p>}
+                </div>
               </div>
               <div className="flex items-center gap-3 shrink-0"><span className={`text-[10px] font-black px-3 py-1.5 rounded-lg shadow-sm shrink-0 ${p.quantity <= 0 ? 'text-rose-600 bg-rose-100/50' : 'text-blue-600 bg-blue-100/50'}`}>STOCK: {p.quantity}</span><div className={`text-white p-2 rounded-xl shadow-md transition-transform duration-300 ${p.quantity <= 0 ? 'bg-rose-500' : 'bg-blue-600 group-hover:rotate-90'}`}><ICONS.Plus /></div></div>
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+};
+
+const CustomDatePicker = ({ deliveryData, seccion, onSelectDate }: { deliveryData: DeliveryRecord[], seccion: string, onSelectDate: (date: string) => void }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const deliveryDates = useMemo(() => {
+    const dates = new Map<string, string>();
+    deliveryData.forEach(d => {
+      if (d.seccion.trim().toLowerCase() === seccion.trim().toLowerCase()) {
+        const ts = getNormalizedTimestamp(d.fecha);
+        if (ts) {
+          const dt = new Date(ts);
+          dates.set(`${dt.getFullYear()}-${dt.getMonth()}-${dt.getDate()}`, d.fecha);
+        }
+      }
+    });
+    return dates;
+  }, [deliveryData, seccion]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getDay();
+  
+  const days = [];
+  for (let i = 0; i < firstDayOfMonth; i++) {
+    days.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    days.push(i);
+  }
+
+  const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+  return (
+    <div className="relative" ref={containerRef}>
+      <button 
+        onClick={() => setIsOpen(!isOpen)} 
+        className="group relative overflow-hidden text-blue-600 font-black text-[9px] md:text-[10px] uppercase tracking-widest bg-white px-4 md:px-6 py-2 md:py-3 rounded-xl transition-all hover:bg-slate-50 active:scale-95 border border-slate-200 flex items-center gap-2 shadow-md"
+      >
+        <ShineEffect />
+        <div className="relative z-10 flex items-center gap-2">
+          <ICONS.Delivery /> CARGAR PEDIDO ANTERIOR
+        </div>
+      </button>
+
+      {isOpen && (
+        <div className="absolute top-full mt-2 left-0 md:left-auto md:right-0 z-50 bg-white rounded-2xl shadow-xl border border-slate-200 p-4 w-64 animate-fade-in">
+          <div className="flex justify-between items-center mb-4">
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1))} className="p-1 hover:bg-slate-100 rounded-lg">&lt;</button>
+            <span className="font-bold text-sm text-slate-800">{monthNames[currentDate.getMonth()]} {currentDate.getFullYear()}</span>
+            <button onClick={() => setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1))} className="p-1 hover:bg-slate-100 rounded-lg">&gt;</button>
+          </div>
+          <div className="grid grid-cols-7 gap-1 text-center mb-2">
+            {['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sa'].map(d => <div key={d} className="text-[10px] font-bold text-slate-400">{d}</div>)}
+          </div>
+          <div className="grid grid-cols-7 gap-1">
+            {days.map((day, idx) => {
+              if (day === null) return <div key={`empty-${idx}`} className="h-8"></div>;
+              const dateKey = `${currentDate.getFullYear()}-${currentDate.getMonth()}-${day}`;
+              const hasDelivery = deliveryDates.has(dateKey);
+              const originalDateStr = deliveryDates.get(dateKey);
+              
+              return (
+                <button
+                  key={idx}
+                  disabled={!hasDelivery}
+                  onClick={() => {
+                    if (hasDelivery && originalDateStr) {
+                      onSelectDate(originalDateStr);
+                      setIsOpen(false);
+                    }
+                  }}
+                  className={`h-8 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
+                    hasDelivery 
+                      ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-500 hover:text-white cursor-pointer shadow-sm border border-emerald-200' 
+                      : 'text-slate-300 cursor-not-allowed hover:bg-slate-50'
+                  }`}
+                  title={hasDelivery ? 'Cargar pedido de este día' : 'Sin entregas'}
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4 flex items-center gap-2 text-[9px] font-bold text-slate-500 uppercase">
+            <div className="w-3 h-3 bg-emerald-100 border border-emerald-200 rounded-sm"></div>
+            <span>Días con entregas</span>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -419,6 +528,7 @@ const App: React.FC = () => {
   const [currentOrderItems, setCurrentOrderItems] = useState<OrderItem[]>([]);
   const [finalizedRequests, setFinalizedRequests] = useState<FinalizedRequest[]>([]);
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
+  const [expandedDeliveryGroupIds, setExpandedDeliveryGroupIds] = useState<Set<string>>(new Set());
   useEffect(() => {
     if (expandedRequestId && !finalizedRequests.some(r => r.id === expandedRequestId)) {
       setExpandedRequestId(null);
@@ -427,6 +537,34 @@ const App: React.FC = () => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [stockError, setStockError] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [hasInitializedMonth, setHasInitializedMonth] = useState(false);
+
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    const now = new Date();
+    const currentYearMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    deliveryData.forEach(d => {
+      const ts = getNormalizedTimestamp(d.fecha);
+      if (ts) {
+        const date = new Date(ts);
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        const ym = `${yyyy}-${mm}`;
+        if (ym <= currentYearMonth) {
+          months.add(ym);
+        }
+      }
+    });
+    return Array.from(months).sort((a, b) => b.localeCompare(a));
+  }, [deliveryData]);
+
+  useEffect(() => {
+    if (!hasInitializedMonth && availableMonths.length > 0) {
+      setSelectedMonth(availableMonths[0]);
+      setHasInitializedMonth(true);
+    }
+  }, [availableMonths, hasInitializedMonth]);
 
   useEffect(() => {
     if (activeSection !== AppSection.QUERY) {
@@ -467,6 +605,16 @@ const App: React.FC = () => {
     const productDataMap: Record<string, { total: number, sections: Record<string, number> }> = {};
     let globalTotal = 0;
     deliveryData.forEach(d => {
+      const ts = getNormalizedTimestamp(d.fecha);
+      if (ts && selectedMonth) {
+        const date = new Date(ts);
+        const yyyy = date.getFullYear();
+        const mm = String(date.getMonth() + 1).padStart(2, '0');
+        if (`${yyyy}-${mm}` !== selectedMonth) return;
+      } else if (selectedMonth) {
+        return;
+      }
+
       const pName = d.producto?.trim();
       if (pName) {
         const qty = (d.cantidad || 0);
@@ -478,7 +626,7 @@ const App: React.FC = () => {
     });
     const top5 = Object.entries(productDataMap).sort(([, a], [, b]) => b.total - a.total).slice(0, 5).map(([name, data]) => ({ name, total: data.total, sections: Object.entries(data.sections).map(([sec, q]) => ({ name: sec || 'N/A', quantity: q, percent: globalTotal > 0 ? Math.round((q / globalTotal) * 100) : 0 })).sort((a,b) => b.quantity - a.quantity) }));
     return { top5, globalTotal };
-  }, [deliveryData]);
+  }, [deliveryData, selectedMonth]);
   const syncData = async (type: 'inventory' | 'delivery' = 'inventory', silent = false) => {
     const link = type === 'inventory' ? sourceLink : DELIVERY_SHEET_URL;
     if (!link || !link.includes('docs.google.com/spreadsheets')) return;
@@ -496,7 +644,7 @@ const App: React.FC = () => {
       if (type === 'inventory') {
         const newInv = rows.map((cols, i) => {
           let parsedQty = parseInt(cols[0]?.replace(/[^0-9-]/g, ''), 10);
-          return { id: `item-${i}-${Date.now()}`, quantity: isNaN(parsedQty) ? 0 : parsedQty, name: cols[1] || 'Sin nombre', sku: cols[1]?.substring(0, 10).toUpperCase() || 'S/N', location: cols[2] || 'No especificado', responsible: cols[3] || 'Sin asignar', minStock: parseInt(cols[4]?.replace(/[^0-9]/g, '')) || 0, link: cols[5] || '', imageUrl: cols[6] || '', category: cols[7] || 'General', arrivalDate: new Date().toISOString() };
+          return { id: `item-${i}-${Date.now()}`, quantity: isNaN(parsedQty) ? 0 : parsedQty, name: cols[1] || 'Sin nombre', sku: cols[1]?.substring(0, 10).toUpperCase() || 'S/N', location: cols[2] || 'No especificado', responsible: cols[3] || 'Sin asignar', minStock: parseInt(cols[4]?.replace(/[^0-9]/g, '')) || 0, valor: cols[5] || '', link: cols[6] || '', imageUrl: cols[7] || '', category: cols[8] || 'General', arrivalDate: new Date().toISOString() };
         });
         setInventory(newInv);
       } else {
@@ -516,14 +664,14 @@ const App: React.FC = () => {
   const lowStockItems = useMemo(() => { const filtered = inventory.filter(p => p.minStock > 0 && p.quantity <= p.minStock); const getWeight = (p: Product) => { if (p.quantity === 0) return 0; if (p.quantity < p.minStock) return 1; return 2; }; return filtered.sort((a, b) => getWeight(a) - getWeight(b)); }, [inventory]);
   const allPossibleDeptos = useMemo(() => { const set = new Set<string>(); deliveryData.forEach(d => { if(d.departamento) set.add(d.departamento); }); return Array.from(set).filter(Boolean).sort(); }, [deliveryData]);
   const allPossibleSecciones = useMemo(() => { const set = new Set<string>(); deliveryData.forEach(d => { if(d.seccion) set.add(d.seccion); }); return Array.from(set).filter(Boolean).sort(); }, [deliveryData]);
-  const filteredDelivery = useMemo(() => { return deliveryData.filter(d => { const matchSeccion = !deliveryFilters.seccion || (d.seccion && d.seccion.toLowerCase().includes(deliveryFilters.seccion.toLowerCase())); const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento; const matchProducto = !deliveryFilters.producto || (d.producto && d.producto.toLowerCase().includes(deliveryFilters.producto.toLowerCase())); const itemDate = getNormalizedTimestamp(d.fecha); if (!itemDate) return matchSeccion && matchDepto && matchProducto; const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio).getTime() : null; const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin).getTime() : null; return matchSeccion && matchDepto && matchProducto && (!start || itemDate >= start) && (!end || itemDate <= end); }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); }, [deliveryData, deliveryFilters]);
+  const filteredDelivery = useMemo(() => { return deliveryData.filter(d => { const matchSeccion = !deliveryFilters.seccion || (d.seccion && d.seccion.toLowerCase() === deliveryFilters.seccion.toLowerCase()); const matchDepto = !deliveryFilters.departamento || d.departamento === deliveryFilters.departamento; const matchProducto = !deliveryFilters.producto || (d.producto && d.producto.toLowerCase().includes(deliveryFilters.producto.toLowerCase())); const itemDate = getNormalizedTimestamp(d.fecha); if (!itemDate) return matchSeccion && matchDepto && matchProducto; const start = deliveryFilters.fechaInicio ? new Date(deliveryFilters.fechaInicio + 'T00:00:00').getTime() : null; const end = deliveryFilters.fechaFin ? new Date(deliveryFilters.fechaFin + 'T23:59:59').getTime() : null; return matchSeccion && matchDepto && matchProducto && (!start || itemDate >= start) && (!end || itemDate <= end); }).sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); }, [deliveryData, deliveryFilters]);
   const isDeliveryFilterActive = useMemo(() => { return !!(deliveryFilters.seccion.trim() || deliveryFilters.departamento || deliveryFilters.producto || deliveryFilters.fechaInicio || deliveryFilters.fechaFin); }, [deliveryFilters]);
   const handleSolicitanteSeccionChange = (val: string) => { const trimmedVal = val.trim(); setSolicitudFilters(prev => { const newState = { ...prev, seccion: val }; if (trimmedVal !== '') { const match = [...deliveryData].reverse().find(d => d.seccion && d.seccion.trim().toLowerCase() === trimmedVal.toLowerCase()); if (match) { newState.departamento = match.departamento || prev.departamento; } } return newState; }); };
   const clearTemporaryOrders = async () => { try { const itemsRef = ref(db, "pedidos_temporales"); await remove(itemsRef); } catch (err) { console.error("Error clearing orders:", err); } };
-  const loadPreviousOrder = async () => { const seccionName = solicitudFilters.seccion.trim().toLowerCase(); if (!seccionName) return; const seccionDeliveries = deliveryData.filter(d => d.seccion.trim().toLowerCase() === seccionName); if (seccionDeliveries.length === 0) return; const sorted = [...seccionDeliveries].sort((a, b) => (getNormalizedTimestamp(b.fecha) || 0) - (getNormalizedTimestamp(a.fecha) || 0)); const latestDate = sorted[0].fecha; const lastOrderItemsRaw = sorted.filter(d => d.fecha === latestDate); await clearTemporaryOrders(); const itemsRef = ref(db, "pedidos_temporales"); const addPromises = lastOrderItemsRaw.map(item => push(itemsRef, { producto: item.producto, cantidad: item.cantidad, departamento: solicitudFilters.departamento, seccion: solicitudFilters.seccion })); await Promise.all(addPromises); };
+  const loadOrderFromDate = async (dateStr: string) => { const seccionName = solicitudFilters.seccion.trim().toLowerCase(); if (!seccionName) return; const seccionDeliveries = deliveryData.filter(d => d.seccion.trim().toLowerCase() === seccionName && d.fecha === dateStr); if (seccionDeliveries.length === 0) return; await clearTemporaryOrders(); const itemsRef = ref(db, "pedidos_temporales"); const addPromises = seccionDeliveries.map(item => push(itemsRef, { producto: item.producto, cantidad: item.cantidad, departamento: solicitudFilters.departamento, seccion: solicitudFilters.seccion })); await Promise.all(addPromises); };
   const addItemToOrder = async (p: Product) => { if (p.quantity <= 0) { setStockError(p.name); return; } const { departamento, seccion } = solicitudFilters; try { const existing = currentOrderItems.find(item => item.producto === p.name && item.seccion === seccion); if (existing && existing.id) { const itemRef = ref(db, `pedidos_temporales/${existing.id}`); await update(itemRef, { cantidad: existing.cantidad + 1 }); } else { const itemsRef = ref(db, "pedidos_temporales"); await push(itemsRef, { producto: p.name, cantidad: 1, departamento, seccion }); } } catch (err) { console.error("Add item error:", err); } };
   const updateItemQuantity = async (idx: number, delta: number) => { try { const item = currentOrderItems[idx]; if (!item || !item.id) return; if (delta > 0) { const productInInventory = inventory.find(p => p.name === item.producto); if (productInInventory && item.cantidad >= productInInventory.quantity) { setStockError(item.producto); return; } } const newVal = item.cantidad + delta; const itemRef = ref(db, `pedidos_temporales/${item.id}`); if (newVal <= 0) { await remove(itemRef); } else { await update(itemRef, { cantidad: newVal }); } } catch (err) { console.error("Update item error:", err); } };
-  const finalizarPedido = async (e: React.MouseEvent) => { const { departamento, seccion } = solicitudFilters; if (!departamento.trim() || !seccion.trim()) return; const userItems = currentOrderItems.filter(i => i.seccion === seccion); if (userItems.length === 0) return; const fechaActual = new Date().toLocaleDateString('es-ES'); const newRequestData = { departamento: departamento.trim(), seccion: seccion.trim(), fecha: fechaActual, items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad })) }; try { const finalizedRef = ref(db, "solicitudes_finalizadas"); await push(finalizedRef, newRequestData); for (const item of userItems) { if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); } } setSolicitudFilters({ departamento: '', seccion: '' }); setSolicitudStep('cerrar'); } catch (err) { console.error("Error al finalizar:", err); } };
+  const finalizarPedido = async (e: React.MouseEvent) => { const { departamento, seccion } = solicitudFilters; if (!departamento.trim() || !seccion.trim()) return; const userItems = currentOrderItems.filter(i => i.seccion === seccion); if (userItems.length === 0) return; const fechaActual = new Date().toLocaleDateString('es-ES'); const horaActual = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }); const newRequestData = { departamento: departamento.trim(), seccion: seccion.trim(), fecha: fechaActual, hora: horaActual, items: userItems.map(i => ({ producto: i.producto, cantidad: i.cantidad })) }; try { const finalizedRef = ref(db, "solicitudes_finalizadas"); await push(finalizedRef, newRequestData); for (const item of userItems) { if (item.id) { await remove(ref(db, `pedidos_temporales/${item.id}`)); } } setSolicitudFilters({ departamento: '', seccion: '' }); setSolicitudStep('cerrar'); } catch (err) { console.error("Error al finalizar:", err); } };
   const handleConfirmOk = async (req: FinalizedRequest) => { 
     if (!req.id) return;
     try { 
@@ -545,7 +693,7 @@ const App: React.FC = () => {
   const navItems = [ { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' }, { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' }, { id: AppSection.SOLICITUD, icon: <ICONS.Solicitud />, label: 'Solicitud' }, { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Historial' }, { id: AppSection.ORDER, icon: <ICONS.ShoppingBag />, label: 'PEDIR' }, ];
   const hasSolicitudFilters = !!(solicitudFilters.seccion && solicitudFilters.departamento);
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-[#f2f2f2] pb-24 md:pb-0 font-['Plus_Jakarta_Sans'] selection:bg-blue-100 selection:text-blue-900 relative overflow-hidden">
+    <div className="min-h-screen flex flex-col md:flex-row bg-[#f2f2f2] pb-24 md:pb-0 font-['Plus_Jakarta_Sans'] selection:bg-blue-100 selection:text-blue-900 relative">
       {/* Banner Superior Decorativo - Fijo y sin degradado de opacidad */}
       <div className="fixed top-0 left-0 right-0 h-40 md:h-64 z-0 overflow-hidden pointer-events-none">
         <img 
@@ -574,7 +722,7 @@ const App: React.FC = () => {
         <div className="p-8 mt-auto"><div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center shadow-sm"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Sistema</p><div className="flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div><span className="text-[9px] font-black text-emerald-600 uppercase">En Línea</span></div></div></div>
       </aside>
       <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full relative z-10`}>
-        <header className={`flex flex-col ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4 md:mb-6'}`}>
+        <header className={`flex flex-col ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4 md:mb-6'} relative z-50`}>
           <div className={`flex flex-col md:flex-row justify-between items-center gap-4 ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4'}`}>
             <div className="block animate-fade-in w-full order-2 md:order-1">
               <div className="flex flex-col items-center text-center md:-ml-36">
@@ -597,7 +745,7 @@ const App: React.FC = () => {
                 </h2>
                 {activeSection === AppSection.SOLICITUD && hasSolicitudFilters && solicitudStep === 'crear' && (
                   <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4">
-                    <button onClick={loadPreviousOrder} className="group relative overflow-hidden text-blue-600 font-black text-[9px] md:text-[10px] uppercase tracking-widest bg-white px-4 md:px-6 py-2 md:py-3 rounded-xl transition-all hover:bg-slate-50 active:scale-95 border border-slate-200 flex items-center gap-2 shadow-md"><ShineEffect /><div className="relative z-10 flex items-center gap-2"><ICONS.Delivery /> PEDIDO ANTERIOR</div></button>
+                    <CustomDatePicker deliveryData={deliveryData} seccion={solicitudFilters.seccion} onSelectDate={loadOrderFromDate} />
                     <button onClick={() => setSolicitudFilters({ departamento: '', seccion: '' })} className="group relative overflow-hidden text-rose-500 font-black text-[9px] md:text-[10px] uppercase hover:underline tracking-widest bg-white px-4 md:px-6 py-2 md:py-3 rounded-xl transition-all hover:bg-slate-50 active:scale-95 border border-slate-200 flex flex-col items-center justify-center leading-none shadow-md"><ShineEffect /><div className="relative z-10 flex flex-col items-center"><span>VOLVER</span><span className="text-[7px] mt-0.5 opacity-60">FILTROS</span></div></button>
                   </div>
                 )}
@@ -606,8 +754,8 @@ const App: React.FC = () => {
             <div className="md:hidden flex items-center justify-center w-full order-1 md:order-2"><CustomLogo trigger={activeSection} /></div>
           </div>
         </header>
-        {activeSection === AppSection.DASHBOARD && ( <div className="space-y-6 animate-fade-in">{deliveryStats.top5.length > 0 ? ( <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} title="Top 5 Productos Solicitados" /> ) : ( <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div> )}</div> )}
-        {activeSection === AppSection.QUERY && ( <div className="animate-fade-in space-y-4 md:space-y-6"><div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.04)] border border-slate-100 transition-all"><AutocompleteSearch products={inventory} onSelect={(p) => { if (p.quantity <= 0) setStockError(p.name); setSelectedProduct(p); }} placeholder="Escribe el nombre del producto..." /></div>{selectedProduct && ( <div className="max-w-4xl mx-auto animate-fade-in"><div className="bg-white rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 p-5 md:p-8 overflow-hidden relative"><div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#00732e] via-[#004894] to-[#00732e]"></div><div className="flex flex-col md:flex-row gap-6 items-center md:items-start">{selectedProduct.imageUrl && ( <div className="shrink-0 relative"><div className="absolute -inset-4 bg-[#00732e]/5 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div><img src={formatImageUrl(selectedProduct.imageUrl)} alt={selectedProduct.name} className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} /></div> )}<div className="flex-1 w-full"><div className="flex justify-between items-start w-full"><div className="flex-1 pr-4"><h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4></div><div className="shrink-0 text-right"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p><p className="text-sm font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 shadow-sm">#{selectedProduct.sku}</p></div></div><div className="mt-4 flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100"><div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg border ${selectedProduct.quantity <= 0 ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-emerald-100 text-[#1b5e20] border-emerald-200'}`}><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div><div className="flex flex-col"><span className={`text-[10px] font-black uppercase tracking-widest opacity-70 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>Existencia en Bodega:</span><span className={`text-2xl font-black leading-none mt-1 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>{selectedProduct.quantity}</span></div></div></div></div></div></div> )}</div> )}
+        {activeSection === AppSection.DASHBOARD && ( <div className="space-y-6 animate-fade-in"><div className="flex justify-end mb-4"><select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"><option value="">TODOS LOS MESES</option>{availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</option>)}</select></div>{deliveryStats.top5.length > 0 ? ( <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} title="Top 5 Productos Solicitados" /> ) : ( <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div> )}</div> )}
+        {activeSection === AppSection.QUERY && ( <div className="animate-fade-in space-y-4 md:space-y-6"><div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.04)] border border-slate-100 transition-all"><AutocompleteSearch products={inventory} showValor={true} onSelect={(p) => { if (p.quantity <= 0) setStockError(p.name); setSelectedProduct(p); }} placeholder="Escribe el nombre del producto..." /></div>{selectedProduct && ( <div className="max-w-4xl mx-auto animate-fade-in"><div className="bg-white rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 p-5 md:p-8 overflow-hidden relative"><div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#00732e] via-[#004894] to-[#00732e]"></div><div className="flex flex-col md:flex-row gap-6 items-center md:items-start">{selectedProduct.imageUrl && ( <div className="shrink-0 relative"><div className="absolute -inset-4 bg-[#00732e]/5 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div><img src={formatImageUrl(selectedProduct.imageUrl)} alt={selectedProduct.name} className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} /></div> )}<div className="flex-1 w-full"><div className="flex justify-between items-start w-full"><div className="flex-1 pr-4"><h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4></div><div className="shrink-0 text-right"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p><p className="text-sm font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 shadow-sm mb-2">#{selectedProduct.sku}</p><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Valor</p><p className="text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 shadow-sm">{selectedProduct.valor || 'N/A'}</p></div></div><div className="mt-4 flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100"><div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg border ${selectedProduct.quantity <= 0 ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-emerald-100 text-[#1b5e20] border-emerald-200'}`}><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div><div className="flex flex-col"><span className={`text-[10px] font-black uppercase tracking-widest opacity-70 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>Existencia en Bodega:</span><span className={`text-2xl font-black leading-none mt-1 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>{selectedProduct.quantity}</span></div></div></div></div></div></div> )}</div> )}
         {activeSection === AppSection.SOLICITUD && (
           <div className="animate-fade-in space-y-3 md:space-y-4 max-w-4xl mx-auto">
             {solicitudStep === 'crear' ? (
@@ -680,7 +828,7 @@ const App: React.FC = () => {
                             <div className="flex flex-col md:flex-row md:justify-between items-start md:items-center gap-3 mb-4">
                               <span className="bg-white px-3 py-1 rounded-lg font-black text-[9px] text-[#2e7d32] uppercase tracking-widest shadow-sm border border-emerald-100">#{req.id.split('-').pop()}</span>
                               <div className="flex items-center gap-3">
-                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter bg-white/80 px-2 py-1 rounded-md">{req.fecha}</span>
+                                <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter bg-white/80 px-2 py-1 rounded-md">{req.fecha}{req.hora ? ` - ${req.hora}` : ''}</span>
                                 <motion.div 
                                   animate={{ rotate: isExpanded ? 180 : 0 }}
                                   className="text-emerald-600"
@@ -702,9 +850,9 @@ const App: React.FC = () => {
                                 transition={{ duration: 0.3, ease: "easeInOut" }}
                                 className="overflow-hidden"
                               >
-                                <div className="p-6 md:p-8 space-y-3 bg-white border-t border-slate-50">
+                                <div className="p-6 md:p-8 space-y-3 bg-white border-t border-slate-100">
                                   {req.items.map((item, i) => ( 
-                                    <div key={i} className="flex justify-between items-center text-[11px] font-black border-b border-slate-50 pb-2 group/item">
+                                    <div key={i} className="flex justify-between items-center text-[11px] font-black border-b border-slate-200 pb-3 last:border-0 last:pb-0 group/item">
                                       <span className="text-slate-600 uppercase truncate pr-4 transition-colors group-hover/item:text-slate-900">{item.producto}</span>
                                       <span className="text-[#2e7d32] bg-emerald-50 px-2.5 py-1 rounded-lg shadow-sm">x{item.cantidad}</span>
                                     </div> 
@@ -752,15 +900,42 @@ const App: React.FC = () => {
                   <table className="w-full text-left table-fixed min-w-[800px]">
                     <thead className="bg-slate-100 text-slate-500 font-black uppercase text-[9px] tracking-[0.2em] border-b border-slate-200"><tr><th className="px-6 md:px-10 py-5 w-24 text-center">Cant.</th><th className="px-6 md:px-10 py-5 w-1/3">Producto</th><th className="px-6 md:px-10 py-5">Sección</th><th className="px-6 md:px-10 py-5">Departamento</th><th className="px-6 md:px-10 py-5 w-44">Fecha</th></tr></thead>
                     <tbody className="text-slate-600 text-[11px] divide-y divide-slate-100">
-                      {filteredDelivery.map((d, idx) => (
-                        <tr key={idx} className="hover:bg-emerald-50 transition-all duration-300 group">
-                          <td className="px-6 md:px-10 py-4 text-center"><span className="font-black text-slate-900 text-xs bg-slate-100 px-2.5 py-1 rounded-xl group-hover:bg-emerald-200 transition-colors">{d.cantidad}</span></td>
-                          <td className="px-6 md:px-10 py-4"><div className="font-black text-[#2e7d32] uppercase tracking-tight group-hover:translate-x-1 transition-transform truncate">{d.producto}</div></td>
-                          <td className="px-6 md:px-10 py-4"><div className="font-black text-slate-800 uppercase tracking-tight truncate bg-slate-50 px-3 py-1.5 rounded-xl inline-block max-w-full group-hover:bg-white transition-colors">{d.seccion}</div></td>
-                          <td className="px-6 md:px-10 py-4"><div className="font-bold text-slate-500 uppercase tracking-widest truncate">{d.departamento}</div></td>
-                          <td className="px-6 md:px-10 py-4"><span className="font-black text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-lg uppercase tracking-tighter whitespace-nowrap">{d.fecha}</span></td>
-                        </tr>
-                      ))}
+                      {Object.values(filteredDelivery.reduce((acc, d) => {
+                        const key = d.producto;
+                        if (!acc[key]) acc[key] = { key, producto: d.producto, cantidad: 0, items: [] };
+                        acc[key].cantidad += (d.cantidad || 0);
+                        acc[key].items.push(d);
+                        return acc;
+                      }, {} as Record<string, any>)).map((group: any, idx) => {
+                        const isRepeated = group.items.length > 1;
+                        const latestItem = group.items[0];
+                        const allSameSeccion = group.items.every((i: any) => i.seccion === latestItem.seccion);
+                        const allSameDepto = group.items.every((i: any) => i.departamento === latestItem.departamento);
+                        const allSameFecha = group.items.every((i: any) => i.fecha === latestItem.fecha);
+                        
+                        return (
+                          <React.Fragment key={idx}>
+                            <tr onClick={() => { if (isRepeated) setExpandedDeliveryGroupIds(prev => { const next = new Set(prev); if (next.has(group.key)) next.delete(group.key); else next.add(group.key); return next; }) }} className={`hover:bg-emerald-50 transition-all duration-300 group ${isRepeated ? 'cursor-pointer' : ''}`}>
+                              <td className="px-6 md:px-10 py-4 text-center"><span className="font-black text-slate-900 text-xs bg-slate-100 px-2.5 py-1 rounded-xl group-hover:bg-emerald-200 transition-colors">{group.cantidad}</span></td>
+                              <td className="px-6 md:px-10 py-4"><div className="font-black text-[#2e7d32] uppercase tracking-tight group-hover:translate-x-1 transition-transform truncate flex items-center gap-2">{group.producto} {isRepeated && <span className="text-[9px] bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-md ml-1">{group.items.length} Entregas</span>} {isRepeated && <motion.div animate={{ rotate: expandedDeliveryGroupIds.has(group.key) ? 180 : 0 }} className="text-emerald-600"><ICONS.ChevronDown /></motion.div>}</div></td>
+                              <td className="px-6 md:px-10 py-4"><div className="font-black text-slate-800 uppercase tracking-tight truncate bg-slate-50 px-3 py-1.5 rounded-xl inline-block max-w-full group-hover:bg-white transition-colors">{isRepeated && !allSameSeccion ? <span className="text-slate-400 italic">Varias</span> : latestItem.seccion}</div></td>
+                              <td className="px-6 md:px-10 py-4"><div className="font-bold text-slate-500 uppercase tracking-widest truncate">{isRepeated && !allSameDepto ? <span className="text-slate-400 italic">Varios</span> : latestItem.departamento}</div></td>
+                              <td className="px-6 md:px-10 py-4"><span className="font-black text-[10px] text-slate-400 bg-slate-50 px-2 py-1 rounded-lg uppercase tracking-tighter whitespace-nowrap">{isRepeated && !allSameFecha ? <span className="text-slate-400 italic">Varias fechas</span> : latestItem.fecha}</span></td>
+                            </tr>
+                            {expandedDeliveryGroupIds.has(group.key) && isRepeated && group.items.map((item: any, i: number) => (
+                              <tr key={`${idx}-${i}`} className="bg-slate-50/50 border-l-4 border-emerald-400 text-[10px]">
+                                <td className="px-6 md:px-10 py-3 text-center"><span className="font-bold text-slate-700">{item.cantidad}</span></td>
+                                <td className="px-6 md:px-10 py-3" colSpan={4}>
+                                  <div className="flex justify-between items-center w-full pr-4">
+                                    <span className="font-bold text-slate-600 uppercase tracking-tight">Entregado a: {item.departamento} - {item.seccion}</span>
+                                    <span className="font-black text-slate-400">{item.fecha}</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </React.Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>

@@ -3,7 +3,7 @@ import { GoogleGenAI } from "@google/genai";
 import { Product } from "../types";
 
 // Always initialize with a named parameter and use process.env.API_KEY directly.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 export const getInventoryInsights = async (query: string, inventory: Product[]) => {
   try {
