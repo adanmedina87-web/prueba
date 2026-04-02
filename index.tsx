@@ -252,18 +252,20 @@ const formatImageUrl = (url: string) => {
 interface SectionBreakdown {
   name: string;
   quantity: number;
+  value: number;
   percent: number;
 }
 interface ProductStat {
   name: string;
   total: number;
+  totalValue: number;
   sections: SectionBreakdown[];
 }
-const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: string }> = ({ data, globalTotal, title }) => {
+const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, globalTotalValue?: number, title?: string, showValues?: boolean }> = ({ data, globalTotal, globalTotalValue, title, showValues }) => {
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
   const [highlightedIndex, setHighlightedIndex] = useState<number | null>(null);
-  const localSum = data.reduce((sum, item) => sum + item.total, 0);
-  const displayTotal = globalTotal || localSum;
+  const localSum = data.reduce((sum, item) => sum + (showValues ? item.totalValue : item.total), 0);
+  const displayTotal = (showValues ? globalTotalValue : globalTotal) || localSum;
   const colors = ['#1e40af', '#2563eb', '#3b82f6', '#60a5fa', '#93c5fd'];
   const radiusX = 140;
   const radiusY = 75;
@@ -273,7 +275,8 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
   if (localSum === 0) return null;
   let angleSum = 0;
   const slices = data.map((item, i) => {
-    const sliceAngle = (item.total / localSum) * 2 * Math.PI;
+    const metric = showValues ? item.totalValue : item.total;
+    const sliceAngle = (metric / localSum) * 2 * Math.PI;
     const startAngle = angleSum;
     const endAngle = angleSum + sliceAngle;
     angleSum = endAngle;
@@ -282,7 +285,7 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
   });
   const sortedSlices = [...slices].sort((a, b) => Math.sin(a.midAngle) - Math.sin(b.midAngle));
   return (
-    <div className="bg-white/95 backdrop-blur-sm p-6 md:p-12 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-200/60 mb-8 overflow-hidden">
+    <div className="bg-white/95 backdrop-blur-sm p-6 md:p-12 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-200/60 mb-8 overflow-hidden h-full">
       <div className="text-xs font-black text-slate-800 mb-10 uppercase tracking-widest flex items-center gap-3">
         <div className="w-2 h-6 bg-gradient-to-b from-blue-600 to-indigo-600 rounded-full shadow-lg shadow-blue-200"></div>
         {title || "Estadísticas"}
@@ -313,7 +316,9 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
           </svg>
         </div>
         <div className="flex-1 w-full space-y-3">
-          {data.map((item, i) => (
+          {data.map((item, i) => {
+            const metric = showValues ? item.totalValue : item.total;
+            return (
             <div key={`legend-${i}`} className="group transition-all" onMouseEnter={() => setHighlightedIndex(i)} onMouseLeave={() => setHighlightedIndex(null)}>
               <button onClick={() => setExpandedIndex(expandedIndex === i ? null : i)} className="w-full flex items-center justify-between p-4 rounded-2xl transition-all duration-300 transform">
                 <div className="flex items-center gap-4">
@@ -321,29 +326,92 @@ const PieChart3D: React.FC<{ data: ProductStat[], globalTotal?: number, title?: 
                   <span className="text-[11px] font-black text-slate-700 uppercase tracking-tight truncate max-w-[150px] lg:max-w-[200px] text-left">{item.name}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100 group-hover:text-blue-600">{Math.round((item.total / displayTotal) * 100)}%</span>
-                  <span className="text-[11px] font-black text-blue-600 w-8 text-right">{item.total}</span>
+                  <span className="text-[10px] font-bold text-slate-400 bg-slate-100/80 px-2 py-1 rounded-md transition-colors group-hover:bg-blue-100 group-hover:text-blue-600">{displayTotal > 0 ? Math.round((metric / displayTotal) * 100) : 0}%</span>
+                  <span className="text-[11px] font-black text-blue-600 w-16 text-right">{showValues ? `$${metric.toLocaleString('es-CL')}` : metric}</span>
                   <div className={`transition-transform duration-500 ${expandedIndex === i ? 'rotate-180 text-blue-600' : 'text-slate-300'}`}><ICONS.ChevronDown /></div>
                 </div>
               </button>
               <div className={`overflow-hidden transition-all duration-500 ease-in-out ${expandedIndex === i ? 'max-h-[300px] opacity-100 mt-2' : 'max-h-0 opacity-0'}`}>
                 <div className="ml-8 px-5 py-4 bg-white/50 backdrop-blur-md border border-blue-50/50 rounded-2xl shadow-inner overflow-hidden">
-                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-50/50 pb-2 flex justify-between"><span>Desglose</span><span>% / Cant.</span></div>
+                  <div className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-3 border-b border-slate-50/50 pb-2 flex justify-between"><span>Desglose</span><span>% / {showValues ? 'Valor' : 'Cant.'}</span></div>
                   <div className="space-y-2">
-                    {item.sections.map((sec, j) => (
+                    {item.sections.map((sec, j) => {
+                      const secMetric = showValues ? sec.value : sec.quantity;
+                      return (
                       <div key={`sec-${j}`} className="flex justify-between items-center group/item hover:bg-blue-50/40 rounded px-2 py-1 transition-colors cursor-default" onMouseEnter={() => setHighlightedIndex(i)}>
                         <span className="text-[10px] font-bold text-slate-600 uppercase truncate pr-4">{sec.name}</span>
                         <div className="flex items-center gap-2">
-                          <span className="text-[9px] font-bold text-slate-400">{sec.percent}%</span>
-                          <span className="text-[10px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded shadow-sm">{sec.quantity}</span>
+                          <span className="text-[9px] font-bold text-slate-400">{metric > 0 ? Math.round((secMetric / metric) * 100) : 0}%</span>
+                          <span className="text-[10px] font-black text-blue-600 bg-blue-50/80 px-2 py-0.5 rounded shadow-sm">{showValues ? `$${secMetric.toLocaleString('es-CL')}` : secMetric}</span>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
               </div>
             </div>
-          ))}
+          )})}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const BarChart: React.FC<{ 
+  data: { name: string, quantity: number, value: number, monthKey?: string }[], 
+  inventory: Product[],
+  searchQuery: string,
+  onSearchChange: (val: string) => void,
+  onProductSelect: (p: Product | null) => void
+}> = ({ data, inventory, searchQuery, onSearchChange, onProductSelect }) => {
+  const maxValue = Math.max(...data.map(d => d.value), 1);
+  return (
+    <div className="bg-white/95 backdrop-blur-sm p-6 md:p-12 pb-64 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-200/60 mb-8 overflow-visible h-full">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-10">
+        <div className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
+          <div className="w-2 h-6 bg-gradient-to-b from-emerald-600 to-teal-600 rounded-full shadow-lg shadow-emerald-200"></div>
+          Comparación por Meses
+        </div>
+      </div>
+      {data.length === 0 ? (
+        <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] opacity-60">No hay datos para este producto</div>
+      ) : (
+        <div className="flex items-end justify-around h-64 gap-2 md:gap-4 mt-12 relative">
+          {data.map((item, i) => {
+            const heightPct = (item.value / maxValue) * 100;
+            return (
+              <div key={i} className="flex flex-col items-center justify-end h-full w-full group relative">
+                <div className="mb-2 flex flex-col items-center text-center z-10">
+                  <div className="text-[10px] font-black text-emerald-600">${item.value.toLocaleString('es-CL')}</div>
+                  <div className="text-[9px] font-bold text-slate-500">{item.quantity} unds.</div>
+                </div>
+                <div className="w-full max-w-[40px] md:max-w-[60px] bg-slate-100 rounded-t-xl overflow-hidden relative flex items-end h-full">
+                  <div 
+                    className="w-full bg-gradient-to-t from-emerald-400 to-teal-500 rounded-t-xl transition-all duration-1000" 
+                    style={{ height: `${Math.max(heightPct, 2)}%` }}
+                  ></div>
+                </div>
+                <div className="mt-4 text-center text-[10px] md:text-[11px] font-black text-slate-700 uppercase tracking-tight truncate w-full" title={item.name}>
+                  {item.name.split(' ')[0]}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <div className="mt-10 w-full flex justify-center">
+        <div className="w-full max-w-3xl">
+          <AutocompleteSearch 
+            products={inventory} 
+            onSelect={(p) => onProductSelect(p)} 
+            value={searchQuery} 
+            onChange={(val) => {
+              onSearchChange(val);
+              if (val.trim() === '') onProductSelect(null);
+            }} 
+            placeholder="Buscar producto para comparar..." 
+            inputClassName="w-full px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all shadow-sm"
+          />
         </div>
       </div>
     </div>
@@ -386,7 +454,7 @@ const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product)
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} onFocus={() => query.trim().length > 0 && setIsOpen(true)} placeholder={placeholder || "¿Qué producto buscas?"} className={inputClassName || "w-full px-4 py-3 md:px-5 md:py-3.5 pl-5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-[0_2px_8px_rgba(0,0,0,0.02)] text-sm font-bold uppercase tracking-tight"} />
       </div>
       {isOpen && suggestions.length > 0 && (
-        <ul className="absolute z-[100] w-full mt-3 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] overflow-hidden divide-y divide-slate-50 max-h-[340px] overflow-y-auto animate-fade-in scrollbar-hide">
+        <ul className="absolute z-[100] w-full mt-3 bg-white/95 backdrop-blur-xl border border-slate-100 rounded-2xl shadow-[0_20px_40px_rgba(0,0,0,0.12)] overflow-hidden divide-y divide-slate-50 max-h-[450px] overflow-y-auto animate-fade-in scrollbar-hide">
           {suggestions.map((p) => (
             <li key={p.id} onClick={() => { onSelect(p); if (value !== undefined) { setQuery(p.name); } else { setQuery(''); } setIsOpen(false); }} className="px-5 py-3 hover:bg-blue-50/80 cursor-pointer flex justify-between items-center transition-all i-active:bg-blue-100 group">
               <div className="flex items-center gap-4 flex-1 pr-3 truncate">
@@ -539,6 +607,15 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const [hasInitializedMonth, setHasInitializedMonth] = useState(false);
+  const [dashboardFilterType, setDashboardFilterType] = useState<'cantidad' | 'gastos'>('cantidad');
+  const [showDeliveryValues, setShowDeliveryValues] = useState(false);
+  const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
+  const [dashboardSelectedProduct, setDashboardSelectedProduct] = useState<Product | null>(null);
+
+  const parseValor = (valorStr?: string) => {
+    if (!valorStr) return 0;
+    return parseInt(valorStr.replace(/[^0-9]/g, ''), 10) || 0;
+  };
 
   const availableMonths = useMemo(() => {
     const months = new Set<string>();
@@ -602,8 +679,9 @@ const App: React.FC = () => {
     return () => { unsubscribeItems(); unsubscribeFinalized(); };
   }, []);
   const deliveryStats = useMemo(() => {
-    const productDataMap: Record<string, { total: number, sections: Record<string, number> }> = {};
+    const productDataMap: Record<string, { total: number, totalValue: number, sections: Record<string, { quantity: number, value: number }> }> = {};
     let globalTotal = 0;
+    let globalTotalValue = 0;
     deliveryData.forEach(d => {
       const ts = getNormalizedTimestamp(d.fecha);
       if (ts && selectedMonth) {
@@ -618,15 +696,94 @@ const App: React.FC = () => {
       const pName = d.producto?.trim();
       if (pName) {
         const qty = (d.cantidad || 0);
-        if (!productDataMap[pName]) { productDataMap[pName] = { total: 0, sections: {} }; }
+        const invProduct = inventory.find(p => p.name.toLowerCase() === pName.toLowerCase());
+        const unitValue = parseValor(invProduct?.valor);
+        const val = qty * unitValue;
+
+        if (!productDataMap[pName]) { productDataMap[pName] = { total: 0, totalValue: 0, sections: {} }; }
         productDataMap[pName].total += qty;
-        productDataMap[pName].sections[d.seccion] = (productDataMap[pName].sections[d.seccion] || 0) + qty;
+        productDataMap[pName].totalValue += val;
+        
+        if (!productDataMap[pName].sections[d.seccion]) {
+          productDataMap[pName].sections[d.seccion] = { quantity: 0, value: 0 };
+        }
+        productDataMap[pName].sections[d.seccion].quantity += qty;
+        productDataMap[pName].sections[d.seccion].value += val;
+        
         globalTotal += qty;
+        globalTotalValue += val;
       }
     });
-    const top5 = Object.entries(productDataMap).sort(([, a], [, b]) => b.total - a.total).slice(0, 5).map(([name, data]) => ({ name, total: data.total, sections: Object.entries(data.sections).map(([sec, q]) => ({ name: sec || 'N/A', quantity: q, percent: globalTotal > 0 ? Math.round((q / globalTotal) * 100) : 0 })).sort((a,b) => b.quantity - a.quantity) }));
-    return { top5, globalTotal };
-  }, [deliveryData, selectedMonth]);
+    const top5 = Object.entries(productDataMap).sort(([, a], [, b]) => {
+      if (dashboardFilterType === 'gastos') {
+        return b.totalValue - a.totalValue;
+      } else {
+        return b.total - a.total;
+      }
+    }).slice(0, 5).map(([name, data]) => ({ 
+      name, 
+      total: data.total, 
+      totalValue: data.totalValue,
+      sections: Object.entries(data.sections).map(([sec, stats]) => ({ 
+        name: sec || 'N/A', 
+        quantity: stats.quantity, 
+        value: stats.value,
+        percent: globalTotal > 0 ? Math.round((stats.quantity / globalTotal) * 100) : 0 
+      })).sort((a,b) => {
+        if (dashboardFilterType === 'gastos') {
+          return b.value - a.value;
+        } else {
+          return b.quantity - a.quantity;
+        }
+      }) 
+    }));
+    return { top5, globalTotal, globalTotalValue };
+  }, [deliveryData, selectedMonth, inventory, dashboardFilterType]);
+
+  const barChartData = useMemo(() => {
+    const monthDataMap: Record<string, { quantity: number, value: number }> = {};
+    
+    deliveryData.forEach(d => {
+      const ts = getNormalizedTimestamp(d.fecha);
+      if (!ts) return;
+      
+      const date = new Date(ts);
+      const yyyy = date.getFullYear();
+      const mm = String(date.getMonth() + 1).padStart(2, '0');
+      const monthKey = `${yyyy}-${mm}`;
+
+      const pName = d.producto?.trim();
+      if (!pName) return;
+
+      if (dashboardSelectedProduct && pName.toLowerCase() !== dashboardSelectedProduct.name.toLowerCase()) {
+        return;
+      }
+
+      const qty = (d.cantidad || 0);
+      const invProduct = inventory.find(p => p.name.toLowerCase() === pName.toLowerCase());
+      const unitValue = parseValor(invProduct?.valor);
+      
+      if (!monthDataMap[monthKey]) { monthDataMap[monthKey] = { quantity: 0, value: 0 }; }
+      monthDataMap[monthKey].quantity += qty;
+      monthDataMap[monthKey].value += (qty * unitValue);
+    });
+
+    let dataList = Object.entries(monthDataMap).map(([monthKey, data]) => {
+      const [yyyy, mm] = monthKey.split('-');
+      const date = new Date(parseInt(yyyy), parseInt(mm) - 1, 1);
+      const monthName = date.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+      return {
+        name: monthName.charAt(0).toUpperCase() + monthName.slice(1),
+        monthKey,
+        quantity: data.quantity,
+        value: data.value
+      };
+    });
+
+    dataList = dataList.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+
+    return dataList;
+  }, [deliveryData, inventory, dashboardSelectedProduct]);
   const syncData = async (type: 'inventory' | 'delivery' = 'inventory', silent = false) => {
     const link = type === 'inventory' ? sourceLink : DELIVERY_SHEET_URL;
     if (!link || !link.includes('docs.google.com/spreadsheets')) return;
@@ -754,7 +911,50 @@ const App: React.FC = () => {
             <div className="md:hidden flex items-center justify-center w-full order-1 md:order-2"><CustomLogo trigger={activeSection} /></div>
           </div>
         </header>
-        {activeSection === AppSection.DASHBOARD && ( <div className="space-y-6 animate-fade-in"><div className="flex justify-end mb-4"><select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"><option value="">TODOS LOS MESES</option>{availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</option>)}</select></div>{deliveryStats.top5.length > 0 ? ( <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} title="Top 5 Productos Solicitados" /> ) : ( <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div> )}</div> )}
+        {activeSection === AppSection.DASHBOARD && (
+          <div className="space-y-6 animate-fade-in">
+            <div className="flex justify-end gap-4 mb-4">
+              <div className="flex items-center gap-4">
+                <div className="flex bg-slate-100 p-1 rounded-xl">
+                  <button 
+                    onClick={() => setDashboardFilterType('cantidad')}
+                    className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${dashboardFilterType === 'cantidad' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Cantidad
+                  </button>
+                  <button 
+                    onClick={() => setDashboardFilterType('gastos')}
+                    className={`px-4 py-2 rounded-lg text-xs font-black uppercase transition-all ${dashboardFilterType === 'gastos' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  >
+                    Gastos
+                  </button>
+                </div>
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-black uppercase text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                  <option value="">TODOS LOS MESES</option>
+                  {availableMonths.map(m => <option key={m} value={m}>{new Date(m + '-01T00:00:00').toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })}</option>)}
+                </select>
+              </div>
+            </div>
+            {deliveryStats.top5.length > 0 ? (
+              <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-4 hide-scrollbar">
+                <div className="min-w-full snap-center">
+                  <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} globalTotalValue={deliveryStats.globalTotalValue} showValues={dashboardFilterType === 'gastos'} title="Top 5 Productos Solicitados" />
+                </div>
+                <div className="min-w-full snap-center">
+                  <BarChart 
+                    data={barChartData} 
+                    inventory={inventory}
+                    searchQuery={dashboardSearchQuery}
+                    onSearchChange={setDashboardSearchQuery}
+                    onProductSelect={setDashboardSelectedProduct}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div>
+            )}
+          </div>
+        )}
         {activeSection === AppSection.QUERY && ( <div className="animate-fade-in space-y-4 md:space-y-6"><div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.04)] border border-slate-100 transition-all"><AutocompleteSearch products={inventory} showValor={true} onSelect={(p) => { if (p.quantity <= 0) setStockError(p.name); setSelectedProduct(p); }} placeholder="Escribe el nombre del producto..." /></div>{selectedProduct && ( <div className="max-w-4xl mx-auto animate-fade-in"><div className="bg-white rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 p-5 md:p-8 overflow-hidden relative"><div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#00732e] via-[#004894] to-[#00732e]"></div><div className="flex flex-col md:flex-row gap-6 items-center md:items-start">{selectedProduct.imageUrl && ( <div className="shrink-0 relative"><div className="absolute -inset-4 bg-[#00732e]/5 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div><img src={formatImageUrl(selectedProduct.imageUrl)} alt={selectedProduct.name} className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} /></div> )}<div className="flex-1 w-full"><div className="flex justify-between items-start w-full"><div className="flex-1 pr-4"><h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4></div><div className="shrink-0 text-right"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p><p className="text-sm font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 shadow-sm mb-2">#{selectedProduct.sku}</p><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Valor</p><p className="text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 shadow-sm">{selectedProduct.valor || 'N/A'}</p></div></div><div className="mt-4 flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100"><div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg border ${selectedProduct.quantity <= 0 ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-emerald-100 text-[#1b5e20] border-emerald-200'}`}><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div><div className="flex flex-col"><span className={`text-[10px] font-black uppercase tracking-widest opacity-70 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>Existencia en Bodega:</span><span className={`text-2xl font-black leading-none mt-1 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>{selectedProduct.quantity}</span></div></div></div></div></div></div> )}</div> )}
         {activeSection === AppSection.SOLICITUD && (
           <div className="animate-fade-in space-y-3 md:space-y-4 max-w-4xl mx-auto">
@@ -884,18 +1084,39 @@ const App: React.FC = () => {
                <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2"><h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.3em] opacity-70">Panel de Filtrado Avanzado</h3></div>
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Producto</label><AutocompleteSearch products={inventory} onSelect={(p) => setDeliveryFilters({...deliveryFilters, producto: p.name})} value={deliveryFilters.producto} onChange={(val) => setDeliveryFilters({...deliveryFilters, producto: val})} placeholder="Buscar producto..." inputClassName="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /></div>
-                  <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección</label><input type="text" list="secciones-entrega-list" value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} placeholder="" className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /><datalist id="secciones-entrega-list">{allPossibleSecciones.map(s => <option key={s} value={s} />)}</datalist></div>
+                  <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección</label><select value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm"><option value="">TODAS LAS SECCIONES</option>{allPossibleSecciones.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                   <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento Destino</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm"><option value="">TODOS LOS DEPTOS</option>{allPossibleDeptos.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
                   <div className="grid grid-cols-2 gap-4 md:col-span-3">
                     <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Inicial</label><input type="date" value={deliveryFilters.fechaInicio} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaInicio: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
                     <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Fecha Límite</label><input type="date" value={deliveryFilters.fechaFin} onChange={(e) => setDeliveryFilters({...deliveryFilters, fechaFin: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black focus:ring-4 focus:ring-blue-500/10 transition-all shadow-sm" /></div>
                   </div>
-                  <div className="md:col-span-3 pt-2"><button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: '', producto: ''})} className="relative overflow-hidden group w-full py-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all hover:bg-rose-500 hover:text-white shadow-sm active:scale-[0.99]"><ShineEffect /><span className="relative z-10">REINICIAR FILTROS</span></button></div>
+                  <div className="md:col-span-3 pt-2 flex gap-4">
+                    <button onClick={() => setShowDeliveryValues(!showDeliveryValues)} className={`relative overflow-hidden group flex-1 py-3 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all shadow-sm active:scale-[0.99] border ${showDeliveryValues ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200' : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'}`}><ShineEffect /><span className="relative z-10">{showDeliveryValues ? 'OCULTAR VALORES' : 'MOSTRAR VALORES'}</span></button>
+                    <button onClick={() => setDeliveryFilters({seccion: '', departamento: '', fechaInicio: '', fechaFin: '', producto: ''})} className="relative overflow-hidden group flex-1 py-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-[9px] font-black uppercase tracking-[0.3em] transition-all hover:bg-rose-500 hover:text-white shadow-sm active:scale-[0.99]"><ShineEffect /><span className="relative z-10">REINICIAR FILTROS</span></button>
+                  </div>
                </div>
             </div>
             {isDeliveryFilterActive && (
               <div className="bg-white rounded-[32px] md:rounded-[48px] shadow-[0_30px_70px_rgba(0,0,0,0.05)] border border-slate-200 overflow-hidden animate-fade-in transition-all">
-                <div className="p-6 md:p-10 border-b bg-emerald-50 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden"><div className="absolute top-0 right-0 w-64 h-64 bg-[#2e7d32]/5 rounded-full -mr-20 -mt-20 blur-3xl"></div><div className="relative"><h3 className="font-black text-[#1b5e20] text-lg md:text-xl uppercase tracking-tighter mb-1">Historial de Transacciones</h3><div className="text-[#2e7d32]/80 text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#2e7d32] rounded-full animate-pulse"></div>{filteredDelivery.length} Registros Encontrados</div></div><div className="relative group bg-white px-6 py-4 rounded-[24px] border border-emerald-100 shadow-xl text-center transform transition-transform hover:scale-105 duration-500"><p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Unidades</p><p className="text-xl md:text-2xl font-black text-[#2e7d32] tracking-tighter group-hover:scale-110 transition-transform">{filteredDelivery.reduce((acc, curr) => acc + (curr.cantidad || 0), 0)}</p></div></div>
+                <div className="p-6 md:p-10 border-b bg-emerald-50 flex flex-col md:flex-row justify-between items-center gap-4 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-[#2e7d32]/5 rounded-full -mr-20 -mt-20 blur-3xl"></div>
+                  <div className="relative"><h3 className="font-black text-[#1b5e20] text-lg md:text-xl uppercase tracking-tighter mb-1">Historial de Transacciones</h3><div className="text-[#2e7d32]/80 text-[8px] md:text-[9px] font-black uppercase tracking-[0.4em] flex items-center gap-2"><div className="w-1.5 h-1.5 bg-[#2e7d32] rounded-full animate-pulse"></div>{filteredDelivery.length} Registros Encontrados</div></div>
+                  <div className="flex gap-4 relative">
+                    <div className="group bg-white px-6 py-4 rounded-[24px] border border-emerald-100 shadow-xl text-center transform transition-transform hover:scale-105 duration-500"><p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Total Unidades</p><p className="text-xl md:text-2xl font-black text-[#2e7d32] tracking-tighter group-hover:scale-110 transition-transform">{filteredDelivery.reduce((acc, curr) => acc + (curr.cantidad || 0), 0)}</p></div>
+                    {showDeliveryValues && (
+                      <div className="group bg-white px-6 py-4 rounded-[24px] border border-emerald-100 shadow-xl text-center transform transition-transform hover:scale-105 duration-500">
+                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Valor Acumulado</p>
+                        <p className="text-xl md:text-2xl font-black text-[#2e7d32] tracking-tighter group-hover:scale-110 transition-transform">
+                          ${filteredDelivery.reduce((acc, curr) => {
+                            const invProduct = inventory.find(p => p.name.toLowerCase() === curr.producto?.trim().toLowerCase());
+                            const unitValue = parseValor(invProduct?.valor);
+                            return acc + ((curr.cantidad || 0) * unitValue);
+                          }, 0).toLocaleString('es-CL')}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div className="overflow-x-auto scrollbar-hide">
                   <table className="w-full text-left table-fixed min-w-[800px]">
                     <thead className="bg-slate-100 text-slate-500 font-black uppercase text-[9px] tracking-[0.2em] border-b border-slate-200"><tr><th className="px-6 md:px-10 py-5 w-24 text-center">Cant.</th><th className="px-6 md:px-10 py-5 w-1/3">Producto</th><th className="px-6 md:px-10 py-5">Sección</th><th className="px-6 md:px-10 py-5">Departamento</th><th className="px-6 md:px-10 py-5 w-44">Fecha</th></tr></thead>
