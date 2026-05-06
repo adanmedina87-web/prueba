@@ -418,6 +418,123 @@ const BarChart: React.FC<{
   );
 };
 
+const StockValueCard: React.FC<{ inventory: Product[] }> = ({ inventory }) => {
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const stockItems = useMemo(() => {
+    return inventory.map(item => {
+      const q = item.quantity || 0;
+      const v = typeof item.valor === 'string' ? (parseInt(item.valor.replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      return { ...item, totalValue: q * v, unitValue: v };
+    }).filter(item => item.totalValue > 0)
+      .sort((a, b) => b.totalValue - a.totalValue);
+  }, [inventory]);
+
+  const totalStockValue = useMemo(() => {
+    return stockItems.reduce((acc, curr) => acc + curr.totalValue, 0);
+  }, [stockItems]);
+
+  const selectedStockItem = useMemo(() => {
+    if (!selectedProduct) return null;
+    
+    // Aggregating all items with the same name
+    const itemsWithName = stockItems.filter(item => item.name.trim().toLowerCase() === selectedProduct.name.trim().toLowerCase());
+    
+    if (itemsWithName.length === 0) {
+      const v = typeof selectedProduct.valor === 'string' ? (parseInt(selectedProduct.valor.replace(/[^0-9]/g, ''), 10) || 0) : 0;
+      const q = selectedProduct.quantity || 0;
+      return {
+        ...selectedProduct,
+        quantity: q,
+        totalValue: q * v,
+        unitValue: v
+      };
+    }
+    
+    const totalQty = itemsWithName.reduce((acc, curr) => acc + (curr.quantity || 0), 0);
+    const totalVal = itemsWithName.reduce((acc, curr) => acc + curr.totalValue, 0);
+    const firstItem = itemsWithName[0];
+    
+    return {
+      ...firstItem,
+      name: selectedProduct.name, // keep original search name casing
+      quantity: totalQty,
+      totalValue: totalVal,
+      unitValue: firstItem.unitValue
+    };
+  }, [selectedProduct, stockItems]);
+
+  return (
+    <div className="bg-white/95 backdrop-blur-sm p-6 md:p-12 pb-8 rounded-[40px] shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-200/60 overflow-visible h-full flex flex-col min-h-[450px]">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+        <div className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-3">
+          <div className="w-2 h-6 bg-gradient-to-b from-indigo-600 to-purple-600 rounded-full shadow-lg shadow-indigo-200"></div>
+          Valorización de Inventario
+        </div>
+        <div className="text-right">
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Valor Total Stock</p>
+          <div className="text-2xl md:text-3xl font-black text-indigo-700 tracking-tighter">
+            ${totalStockValue.toLocaleString('es-CL')}
+          </div>
+        </div>
+      </div>
+      
+      <div className="mt-8 w-full flex-1 flex flex-col items-center">
+        <div className="w-full max-w-3xl mb-8 relative z-20">
+          <AutocompleteSearch 
+            products={inventory}
+            value={searchQuery}
+            onSelect={(p) => {
+              setSearchQuery(p.name);
+              setSelectedProduct(p);
+            }}
+            onChange={(val) => {
+              setSearchQuery(val);
+              if (val.trim() === '') setSelectedProduct(null);
+            }}
+            showValor={true}
+            placeholder="Buscar producto para ver valor..."
+            inputClassName="w-full px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm"
+          />
+        </div>
+
+        {selectedStockItem && (
+          <div className="w-full max-w-3xl bg-slate-50 border border-slate-100 rounded-3xl p-6 md:p-8 animate-fade-in relative z-10">
+             <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h4 className="text-lg md:text-xl font-black text-slate-800 uppercase tracking-tight leading-tight">{selectedStockItem.name}</h4>
+                  <p className="text-xs font-bold text-slate-500 tracking-widest uppercase mt-2">SKU: {selectedStockItem.sku}</p>
+                </div>
+             </div>
+             
+             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+               <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
+                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Cantidad</p>
+                 <p className="text-xl font-black text-slate-700">{selectedStockItem.quantity || 0}</p>
+               </div>
+               <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm text-center">
+                 <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Valor Unitario</p>
+                 <p className="text-xl font-black text-slate-700">${selectedStockItem.unitValue.toLocaleString('es-CL')}</p>
+               </div>
+               <div className="bg-indigo-50 p-4 rounded-2xl border border-indigo-100/50 shadow-sm text-center col-span-2 md:col-span-1">
+                 <p className="text-[9px] font-black text-indigo-400 uppercase tracking-widest mb-2">Valor Total</p>
+                 <p className="text-xl font-black text-indigo-700">${selectedStockItem.totalValue.toLocaleString('es-CL')}</p>
+               </div>
+             </div>
+          </div>
+        )}
+        
+        {!selectedStockItem && (
+          <div className="flex-1 w-full max-w-3xl flex items-center justify-center py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] opacity-60 bg-slate-50 border border-slate-200 rounded-3xl border-dashed">
+            Busque un producto para ver su valor
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const AutocompleteSearch: React.FC<{ products: Product[], onSelect: (p: Product) => void, placeholder?: string, value?: string, onChange?: (val: string) => void, inputClassName?: string, showValor?: boolean }> = ({ products, onSelect, placeholder, value, onChange, inputClassName, showValor }) => {
   const [internalQuery, setInternalQuery] = useState('');
   const query = value !== undefined ? value : internalQuery;
@@ -819,24 +936,44 @@ const App: React.FC = () => {
     window.addEventListener('focus', handleFocus);
     return () => { clearInterval(syncInterval); window.removeEventListener('focus', handleFocus); };
   }, [sourceLink]);
+  const consolidatedInventory = useMemo(() => {
+    const uniqueProducts = new Map<string, Product>();
+    inventory.forEach(p => {
+      const key = p.name.trim().toLowerCase();
+      if (uniqueProducts.has(key)) {
+        const existing = uniqueProducts.get(key)!;
+        existing.quantity += p.quantity;
+      } else {
+        uniqueProducts.set(key, { ...p });
+      }
+    });
+    return Array.from(uniqueProducts.values());
+  }, [inventory]);
+
   const availableInventory = useMemo(() => {
     const pendingQuantities: Record<string, number> = {};
     
     currentOrderItems.forEach(item => {
-      pendingQuantities[item.producto] = (pendingQuantities[item.producto] || 0) + item.cantidad;
+      const key = item.producto.trim().toLowerCase();
+      pendingQuantities[key] = (pendingQuantities[key] || 0) + item.cantidad;
     });
 
     finalizedRequests.forEach(req => {
       req.items.forEach(item => {
-        pendingQuantities[item.producto] = (pendingQuantities[item.producto] || 0) + item.cantidad;
+        const key = item.producto.trim().toLowerCase();
+        pendingQuantities[key] = (pendingQuantities[key] || 0) + item.cantidad;
       });
     });
 
-    return inventory.map(p => ({
-      ...p,
-      quantity: Math.max(0, p.quantity - (pendingQuantities[p.name] || 0))
-    }));
-  }, [inventory, currentOrderItems, finalizedRequests]);
+    return consolidatedInventory.map(p => {
+      const key = p.name.trim().toLowerCase();
+      const currentPending = pendingQuantities[key] || 0;
+      return {
+        ...p,
+        quantity: Math.max(0, p.quantity - currentPending)
+      };
+    });
+  }, [consolidatedInventory, currentOrderItems, finalizedRequests]);
 
   const lowStockItems = useMemo(() => { const filtered = availableInventory.filter(p => p.minStock > 0 && p.quantity <= p.minStock); const getWeight = (p: Product) => { if (p.quantity === 0) return 0; if (p.quantity < p.minStock) return 1; return 2; }; return filtered.sort((a, b) => getWeight(a) - getWeight(b)); }, [availableInventory]);
   const allPossibleDeptos = useMemo(() => { const set = new Set<string>(); deliveryData.forEach(d => { if(d.departamento) set.add(d.departamento); }); return Array.from(set).filter(Boolean).sort(); }, [deliveryData]);
@@ -964,27 +1101,32 @@ const App: React.FC = () => {
                 </select>
               </div>
             </div>
-            {deliveryStats.top5.length > 0 ? (
-              <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-4 hide-scrollbar">
-                <div className="min-w-full snap-center">
-                  <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} globalTotalValue={deliveryStats.globalTotalValue} showValues={dashboardFilterType === 'gastos'} title="Top 5 Productos Solicitados" />
+            <div className="space-y-8 animate-fade-in">
+              {deliveryStats.top5.length > 0 ? (
+                <div className="flex overflow-x-auto snap-x snap-mandatory gap-6 pb-4 hide-scrollbar items-stretch">
+                  <div className="min-w-full snap-center h-full">
+                    <PieChart3D data={deliveryStats.top5} globalTotal={deliveryStats.globalTotal} globalTotalValue={deliveryStats.globalTotalValue} showValues={dashboardFilterType === 'gastos'} title="Top 5 Productos Solicitados" />
+                  </div>
+                  <div className="min-w-full snap-center h-full">
+                    <BarChart 
+                      data={barChartData} 
+                      inventory={consolidatedInventory}
+                      searchQuery={dashboardSearchQuery}
+                      onSearchChange={setDashboardSearchQuery}
+                      onProductSelect={setDashboardSelectedProduct}
+                    />
+                  </div>
+                  <div className="min-w-full snap-center h-full">
+                    <StockValueCard inventory={consolidatedInventory} />
+                  </div>
                 </div>
-                <div className="min-w-full snap-center">
-                  <BarChart 
-                    data={barChartData} 
-                    inventory={inventory}
-                    searchQuery={dashboardSearchQuery}
-                    onSearchChange={setDashboardSearchQuery}
-                    onProductSelect={setDashboardSelectedProduct}
-                  />
-                </div>
-              </div>
-            ) : (
-              <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div>
-            )}
+              ) : (
+                <div className="py-24 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] bg-white border border-dashed border-slate-200 rounded-[48px] opacity-60">No hay datos suficientes para visualizar el gráfico.</div>
+              )}
+            </div>
           </div>
         )}
-        {activeSection === AppSection.QUERY && ( <div className="animate-fade-in space-y-4 md:space-y-6"><div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.04)] border border-slate-100 transition-all"><AutocompleteSearch products={availableInventory} showValor={true} onSelect={(p) => { if (p.quantity <= 0) setStockError(p.name); setSelectedProduct(p); }} placeholder="Escribe el nombre del producto..." /></div>{selectedProduct && ( <div className="max-w-4xl mx-auto animate-fade-in"><div className="bg-white rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 p-5 md:p-8 overflow-hidden relative"><div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#00732e] via-[#004894] to-[#00732e]"></div><div className="flex flex-col md:flex-row gap-6 items-center md:items-start">{selectedProduct.imageUrl && ( <div className="shrink-0 relative"><div className="absolute -inset-4 bg-[#00732e]/5 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div><img src={formatImageUrl(selectedProduct.imageUrl)} alt={selectedProduct.name} className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} /></div> )}<div className="flex-1 w-full"><div className="flex justify-between items-start w-full"><div className="flex-1 pr-4"><h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4></div><div className="shrink-0 text-right"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p><p className="text-sm font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 shadow-sm mb-2">#{selectedProduct.sku}</p><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Valor</p><p className="text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 shadow-sm">{selectedProduct.valor || 'N/A'}</p></div></div><div className="mt-4 flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100"><div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg border ${selectedProduct.quantity <= 0 ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-emerald-100 text-[#1b5e20] border-emerald-200'}`}><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div><div className="flex flex-col"><span className={`text-[10px] font-black uppercase tracking-widest opacity-70 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>Existencia en Bodega:</span><span className={`text-2xl font-black leading-none mt-1 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>{selectedProduct.quantity}</span></div></div></div></div></div></div> )}</div> )}
+        {activeSection === AppSection.QUERY && ( <div className="animate-fade-in space-y-4 md:space-y-6"><div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_60px_rgba(0,0,0,0.04)] border border-slate-100 transition-all"><AutocompleteSearch products={consolidatedInventory} showValor={true} onSelect={(p) => { if (p.quantity <= 0) setStockError(p.name); setSelectedProduct(p); }} placeholder="Escribe el nombre del producto..." /></div>{selectedProduct && ( <div className="max-w-4xl mx-auto animate-fade-in"><div className="bg-white rounded-[32px] shadow-[0_20px_40px_rgba(0,0,0,0.05)] border border-slate-100 p-5 md:p-8 overflow-hidden relative"><div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-[#00732e] via-[#004894] to-[#00732e]"></div><div className="flex flex-col md:flex-row gap-6 items-center md:items-start">{selectedProduct.imageUrl && ( <div className="shrink-0 relative"><div className="absolute -inset-4 bg-[#00732e]/5 rounded-[40px] blur-2xl opacity-0 hover:opacity-100 transition-opacity duration-700"></div><img src={formatImageUrl(selectedProduct.imageUrl)} alt={selectedProduct.name} className="relative w-32 h-32 md:w-44 md:h-44 rounded-2xl shadow-lg border border-slate-50 object-contain transform transition-transform duration-700 hover:scale-[1.03]" onError={(e) => (e.currentTarget.parentElement!.style.display = 'none')} /></div> )}<div className="flex-1 w-full"><div className="flex justify-between items-start w-full"><div className="flex-1 pr-4"><h4 className="text-xl md:text-2xl font-black text-slate-800 uppercase tracking-tighter leading-tight mb-4">{selectedProduct.name}</h4></div><div className="shrink-0 text-right"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Identificador SKU</p><p className="text-sm font-black text-slate-700 bg-slate-100 px-3 py-1 rounded-lg border border-slate-200 shadow-sm mb-2">#{selectedProduct.sku}</p><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Valor</p><p className="text-sm font-black text-emerald-700 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-200 shadow-sm">{selectedProduct.valor || 'N/A'}</p></div></div><div className="mt-4 flex items-center gap-4 bg-slate-50 p-4 rounded-xl border border-slate-100"><div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-lg border ${selectedProduct.quantity <= 0 ? 'bg-rose-100 text-rose-600 border-rose-200' : 'bg-emerald-100 text-[#1b5e20] border-emerald-200'}`}><svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg></div><div className="flex flex-col"><span className={`text-[10px] font-black uppercase tracking-widest opacity-70 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>Existencia en Bodega:</span><span className={`text-2xl font-black leading-none mt-1 ${selectedProduct.quantity <= 0 ? 'text-rose-600' : 'text-[#1b5e20]'}`}>{selectedProduct.quantity}</span></div></div></div></div></div></div> )}</div> )}
         {activeSection === AppSection.SOLICITUD && (
           <div className="animate-fade-in space-y-3 md:space-y-4 max-w-4xl mx-auto">
             {solicitudStep === 'crear' ? (
@@ -1112,7 +1254,7 @@ const App: React.FC = () => {
             <div className="bg-white p-3 md:p-4 rounded-[32px] shadow-[0_20px_60px_rgba(0,0,0,0.03)] border border-slate-200 transition-all hover:shadow-[0_25px_50px_rgba(0,0,0,0.06)]">
                <div className="flex justify-between items-center mb-3 border-b border-slate-100 pb-2"><h3 className="font-black text-slate-800 text-[10px] uppercase tracking-[0.3em] opacity-70">Panel de Filtrado Avanzado</h3></div>
                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Producto</label><AutocompleteSearch products={availableInventory} onSelect={(p) => setDeliveryFilters({...deliveryFilters, producto: p.name})} value={deliveryFilters.producto} onChange={(val) => setDeliveryFilters({...deliveryFilters, producto: val})} placeholder="Buscar producto..." inputClassName="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /></div>
+                  <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Producto</label><AutocompleteSearch products={consolidatedInventory} onSelect={(p) => setDeliveryFilters({...deliveryFilters, producto: p.name})} value={deliveryFilters.producto} onChange={(val) => setDeliveryFilters({...deliveryFilters, producto: val})} placeholder="Buscar producto..." inputClassName="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm" /></div>
                   <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Sección</label><select value={deliveryFilters.seccion} onChange={(e) => setDeliveryFilters({...deliveryFilters, seccion: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm"><option value="">TODAS LAS SECCIONES</option>{allPossibleSecciones.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
                   <div className="space-y-1 group"><label className="text-[7.5px] font-black text-slate-400 uppercase tracking-[0.2em] ml-1 group-focus-within:text-blue-500 transition-colors">Departamento Destino</label><select value={deliveryFilters.departamento} onChange={(e) => setDeliveryFilters({...deliveryFilters, departamento: e.target.value})} className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-black uppercase appearance-none cursor-pointer focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all shadow-sm"><option value="">TODOS LOS DEPTOS</option>{allPossibleDeptos.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
                   <div className="grid grid-cols-2 gap-4 md:col-span-3">
