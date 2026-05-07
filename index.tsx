@@ -421,15 +421,23 @@ const BarChart: React.FC<{
 const StockValueCard: React.FC<{ inventory: Product[] }> = ({ inventory }) => {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortField, setSortField] = useState<'totalValue' | 'unitValue'>('totalValue');
+  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
 
   const stockItems = useMemo(() => {
     return inventory.map(item => {
       const q = item.quantity || 0;
       const v = typeof item.valor === 'string' ? (parseInt(item.valor.replace(/[^0-9]/g, ''), 10) || 0) : 0;
       return { ...item, totalValue: q * v, unitValue: v };
-    }).filter(item => item.totalValue > 0)
-      .sort((a, b) => b.totalValue - a.totalValue);
-  }, [inventory]);
+    }).filter(item => item.totalValue > 0 || item.unitValue > 0)
+      .sort((a, b) => {
+        if (sortField === 'totalValue') {
+          return sortOrder === 'desc' ? b.totalValue - a.totalValue : a.totalValue - b.totalValue;
+        } else {
+          return sortOrder === 'desc' ? b.unitValue - a.unitValue : a.unitValue - b.unitValue;
+        }
+      });
+  }, [inventory, sortField, sortOrder]);
 
   const totalStockValue = useMemo(() => {
     return stockItems.reduce((acc, curr) => acc + curr.totalValue, 0);
@@ -480,26 +488,42 @@ const StockValueCard: React.FC<{ inventory: Product[] }> = ({ inventory }) => {
         </div>
       </div>
       
-      <div className="mt-8 w-full flex-1 flex flex-col items-center">
-        <div className="w-full max-w-3xl mb-8 relative z-20">
-          <AutocompleteSearch 
-            products={inventory}
-            value={searchQuery}
-            onSelect={(p) => {
-              setSearchQuery(p.name);
-              setSelectedProduct(p);
+      <div className="mt-6 w-full flex-1 flex flex-col items-center">
+        <div className="w-full max-w-3xl mb-6 relative z-20 flex gap-2">
+          <div className="flex-1">
+            <AutocompleteSearch 
+              products={inventory}
+              value={searchQuery}
+              onSelect={(p) => {
+                setSearchQuery(p.name);
+                setSelectedProduct(p);
+              }}
+              onChange={(val) => {
+                setSearchQuery(val);
+                if (val.trim() === '') setSelectedProduct(null);
+              }}
+              showValor={true}
+              placeholder="Buscar producto..."
+              inputClassName="w-full px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm"
+            />
+          </div>
+          <select 
+            value={`${sortField}-${sortOrder}`} 
+            onChange={(e) => {
+              const [field, order] = e.target.value.split('-');
+              setSortField(field as 'totalValue' | 'unitValue');
+              setSortOrder(order as 'desc' | 'asc');
             }}
-            onChange={(val) => {
-              setSearchQuery(val);
-              if (val.trim() === '') setSelectedProduct(null);
-            }}
-            showValor={true}
-            placeholder="Buscar producto para ver valor..."
-            inputClassName="w-full px-6 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black uppercase outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all shadow-sm"
-          />
+            className="px-4 py-3 bg-white border border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-700 shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none w-48 truncate"
+          >
+            <option value="totalValue-desc">Total: Mayor a Menor</option>
+            <option value="totalValue-asc">Total: Menor a Mayor</option>
+            <option value="unitValue-desc">Unidad: Mayor a Menor</option>
+            <option value="unitValue-asc">Unidad: Menor a Mayor</option>
+          </select>
         </div>
 
-        {selectedStockItem && (
+        {selectedStockItem ? (
           <div className="w-full max-w-3xl bg-slate-50 border border-slate-100 rounded-3xl p-6 md:p-8 animate-fade-in relative z-10">
              <div className="flex justify-between items-start mb-6">
                 <div>
@@ -523,11 +547,25 @@ const StockValueCard: React.FC<{ inventory: Product[] }> = ({ inventory }) => {
                </div>
              </div>
           </div>
-        )}
-        
-        {!selectedStockItem && (
-          <div className="flex-1 w-full max-w-3xl flex items-center justify-center py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em] opacity-60 bg-slate-50 border border-slate-200 rounded-3xl border-dashed">
-            Busque un producto para ver su valor
+        ) : (
+          <div className="w-full flex-1 overflow-auto bg-slate-50 border border-slate-200 rounded-3xl p-4 hide-scrollbar">
+            <div className="space-y-2 max-h-96 pr-2">
+              {stockItems.slice(0, 50).map((item, idx) => (
+                <div key={idx} className="bg-white p-4 rounded-2xl shadow-[0_5px_15px_rgba(0,0,0,0.02)] border border-slate-100 flex justify-between items-center group hover:bg-slate-50 transition-colors">
+                  <div className="flex-1 pr-4">
+                    <p className="text-sm font-black text-slate-700 uppercase">{item.name}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">{item.quantity} UNDS • VALOR: ${item.unitValue.toLocaleString('es-CL')}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Total</p>
+                    <p className="text-lg font-black text-indigo-700">${item.totalValue.toLocaleString('es-CL')}</p>
+                  </div>
+                </div>
+              ))}
+              {stockItems.length === 0 && (
+                <div className="py-12 text-center text-slate-400 text-[10px] font-black uppercase tracking-[0.4em]">No hay productos con valor registrado</div>
+              )}
+            </div>
           </div>
         )}
       </div>
