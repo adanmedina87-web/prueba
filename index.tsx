@@ -768,9 +768,15 @@ const App: React.FC = () => {
   const [dashboardSearchQuery, setDashboardSearchQuery] = useState('');
   const [dashboardSelectedProduct, setDashboardSelectedProduct] = useState<Product | null>(null);
 
+  const [frozenMonthlyPrices, setFrozenMonthlyPrices] = useState<Record<string, Record<string, number>>>({});
+
   const parseValor = (valorStr?: string) => {
     if (!valorStr) return 0;
     return parseInt(valorStr.replace(/[^0-9]/g, ''), 10) || 0;
+  };
+
+  const sanitizeFirebaseKey = (key: string) => {
+    return key.replace(/[.#$\[\]\/]/g, '_');
   };
 
   const availableMonths = useMemo(() => {
@@ -832,28 +838,69 @@ const App: React.FC = () => {
         setFinalizedRequests(list);
       } else { setFinalizedRequests([]); }
     });
-    return () => { unsubscribeItems(); unsubscribeFinalized(); };
+    const frozenRef = ref(db, "frozen_monthly_prices");
+    const unsubscribeFrozen = onValue(frozenRef, (snapshot) => {
+      setFrozenMonthlyPrices(snapshot.val() || {});
+    });
+    return () => { unsubscribeItems(); unsubscribeFinalized(); unsubscribeFrozen(); };
   }, []);
+  useEffect(() => {
+    if (inventory.length === 0 || deliveryData.length === 0 || availableMonths.length === 0) return;
+
+    const currentYearMonth = (() => {
+      const date = new Date();
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+    })();
+
+    let hasNewFrozen = false;
+    const newFrozenPrices = { ...frozenMonthlyPrices };
+
+    availableMonths.forEach(monthKey => {
+      if (monthKey < currentYearMonth && !newFrozenPrices[monthKey]) {
+        const pricesForMonth: Record<string, number> = {};
+        inventory.forEach(p => {
+          pricesForMonth[sanitizeFirebaseKey(p.name.trim().toLowerCase())] = parseValor(p.valor);
+        });
+        newFrozenPrices[monthKey] = pricesForMonth;
+        hasNewFrozen = true;
+      }
+    });
+
+    if (hasNewFrozen) {
+      set(ref(db, "frozen_monthly_prices"), newFrozenPrices).catch(console.error);
+    }
+  }, [availableMonths, inventory, deliveryData, frozenMonthlyPrices]);
+
   const deliveryStats = useMemo(() => {
     const productDataMap: Record<string, { total: number, totalValue: number, sections: Record<string, { quantity: number, value: number }> }> = {};
     let globalTotal = 0;
     let globalTotalValue = 0;
     deliveryData.forEach(d => {
       const ts = getNormalizedTimestamp(d.fecha);
-      if (ts && selectedMonth) {
+      let recordMonthKey = '';
+      if (ts) {
         const date = new Date(ts);
         const yyyy = date.getFullYear();
         const mm = String(date.getMonth() + 1).padStart(2, '0');
-        if (`${yyyy}-${mm}` !== selectedMonth) return;
-      } else if (selectedMonth) {
-        return;
+        recordMonthKey = `${yyyy}-${mm}`;
       }
+
+      if (recordMonthKey && selectedMonth && recordMonthKey !== selectedMonth) return;
+      if (!recordMonthKey && selectedMonth) return;
 
       const pName = d.producto?.trim();
       if (pName) {
         const qty = (d.cantidad || 0);
-        const invProduct = inventory.find(p => p.name.toLowerCase() === pName.toLowerCase());
-        const unitValue = parseValor(invProduct?.valor);
+        let unitValue = 0;
+        
+        const sanitizedPName = sanitizeFirebaseKey(pName.toLowerCase());
+        if (recordMonthKey && frozenMonthlyPrices[recordMonthKey] && typeof frozenMonthlyPrices[recordMonthKey][sanitizedPName] !== 'undefined') {
+          unitValue = frozenMonthlyPrices[recordMonthKey][sanitizedPName];
+        } else {
+          const invProduct = inventory.find(p => p.name.toLowerCase() === pName.toLowerCase());
+          unitValue = parseValor(invProduct?.valor);
+        }
+        
         const val = qty * unitValue;
 
         if (!productDataMap[pName]) { productDataMap[pName] = { total: 0, totalValue: 0, sections: {} }; }
@@ -894,7 +941,7 @@ const App: React.FC = () => {
       }) 
     }));
     return { top5, globalTotal, globalTotalValue };
-  }, [deliveryData, selectedMonth, inventory, dashboardFilterType]);
+  }, [deliveryData, selectedMonth, inventory, dashboardFilterType, frozenMonthlyPrices]);
 
   const barChartData = useMemo(() => {
     const monthDataMap: Record<string, { quantity: number, value: number }> = {};
@@ -916,8 +963,14 @@ const App: React.FC = () => {
       }
 
       const qty = (d.cantidad || 0);
-      const invProduct = inventory.find(p => p.name.toLowerCase() === pName.toLowerCase());
-      const unitValue = parseValor(invProduct?.valor);
+      let unitValue = 0;
+      const sanitizedPName = sanitizeFirebaseKey(pName.toLowerCase());
+      if (frozenMonthlyPrices[monthKey] && typeof frozenMonthlyPrices[monthKey][sanitizedPName] !== 'undefined') {
+        unitValue = frozenMonthlyPrices[monthKey][sanitizedPName];
+      } else {
+        const invProduct = inventory.find(p => p.name.toLowerCase() === pName.toLowerCase());
+        unitValue = parseValor(invProduct?.valor);
+      }
       
       if (!monthDataMap[monthKey]) { monthDataMap[monthKey] = { quantity: 0, value: 0 }; }
       monthDataMap[monthKey].quantity += qty;
@@ -939,7 +992,7 @@ const App: React.FC = () => {
     dataList = dataList.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
 
     return dataList;
-  }, [deliveryData, inventory, dashboardSelectedProduct]);
+  }, [deliveryData, inventory, dashboardSelectedProduct, frozenMonthlyPrices]);
   const syncData = async (type: 'inventory' | 'delivery' = 'inventory', silent = false) => {
     const link = type === 'inventory' ? sourceLink : DELIVERY_SHEET_URL;
     if (!link || !link.includes('docs.google.com/spreadsheets')) return;
@@ -1316,8 +1369,23 @@ const App: React.FC = () => {
                         <p className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Valor Acumulado</p>
                         <p className="text-xl md:text-2xl font-black text-[#2e7d32] tracking-tighter group-hover:scale-110 transition-transform">
                           ${filteredDelivery.reduce((acc, curr) => {
-                            const invProduct = inventory.find(p => p.name.toLowerCase() === curr.producto?.trim().toLowerCase());
-                            const unitValue = parseValor(invProduct?.valor);
+                            const ts = getNormalizedTimestamp(curr.fecha);
+                            let recordMonthKey = '';
+                            if (ts) {
+                              const date = new Date(ts);
+                              recordMonthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+                            }
+                            
+                            const pName = curr.producto?.trim().toLowerCase() || '';
+                            let unitValue = 0;
+                            const sanitizedPName = sanitizeFirebaseKey(pName);
+                            if (recordMonthKey && frozenMonthlyPrices[recordMonthKey] && typeof frozenMonthlyPrices[recordMonthKey][sanitizedPName] !== 'undefined') {
+                              unitValue = frozenMonthlyPrices[recordMonthKey][sanitizedPName];
+                            } else {
+                              const invProduct = inventory.find(p => p.name.toLowerCase() === pName);
+                              unitValue = parseValor(invProduct?.valor);
+                            }
+                            
                             return acc + ((curr.cantidad || 0) * unitValue);
                           }, 0).toLocaleString('es-CL')}
                         </p>
