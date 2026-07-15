@@ -71,17 +71,27 @@ interface FinalizedRequest {
   items: { producto: string; cantidad: number }[];
 }
 
+interface Activo {
+  id: string;
+  producto: string;
+  responsable: string;
+  lugar: string;
+  documentacion: string;
+}
+
 enum AppSection {
   DASHBOARD = 'DASHBOARD',
   QUERY = 'QUERY',
   SOLICITUD = 'SOLICITUD',
   ENTREGA = 'ENTREGA',
-  ORDER = 'ORDER' 
+  ORDER = 'ORDER',
+  ACTIVOS = 'ACTIVOS'
 }
 
 // --- 2. CONSTANTES E ICONOS ---
 const DEFAULT_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?gid=507872400#gid=507872400';
 const DELIVERY_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?usp=sharing';
+const ACTIVOS_SHEET_URL = 'https://docs.google.com/spreadsheets/d/1JTS32TlyYkWOFrP-v60KSSfZn25uA49KsTGrT6TFFKc/edit?gid=1765471375#gid=1765471375';
 const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz9R2ocvOKfUpf78kVjZxG9EL5tbGxqtvu2Y-YeM7ADGbA41JdHdJ0GRmCJ3Qh8-LY/exec';
 
 const AnimatedTitle = ({ text }: { text: string }) => {
@@ -192,7 +202,9 @@ const ICONS = {
   Plus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>,
   Minus: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 12H4" /></svg>,
   ChevronDown: () => <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>,
-  ShoppingBag: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>
+  ShoppingBag: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" /></svg>,
+  Box: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>,
+  Printer: () => <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" /></svg>
 };
 
 // --- Shine Effect Component ---
@@ -737,7 +749,12 @@ const App: React.FC = () => {
     const saved = localStorage.getItem('inv_v4_final');
     return saved ? JSON.parse(saved) : [];
   });
+  const [activosData, setActivosData] = useState<Activo[]>(() => {
+    const saved = localStorage.getItem('activos_v1');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [sourceLink, setSourceLink] = useState(() => localStorage.getItem('inv_link_v4_final') || DEFAULT_SHEET_URL);
+  const [activosFilter, setActivosFilter] = useState('');
   const [deliveryData, setDeliveryData] = useState<DeliveryRecord[]>(() => {
     const saved = localStorage.getItem('del_v4_final');
     return saved ? JSON.parse(saved) : [];
@@ -769,6 +786,7 @@ const App: React.FC = () => {
   const [dashboardSelectedProduct, setDashboardSelectedProduct] = useState<Product | null>(null);
 
   const [frozenMonthlyPrices, setFrozenMonthlyPrices] = useState<Record<string, Record<string, number>>>({});
+  const [docUrl, setDocUrl] = useState<string | null>(null);
 
   const parseValor = (valorStr?: string) => {
     if (!valorStr) return 0;
@@ -993,8 +1011,8 @@ const App: React.FC = () => {
 
     return dataList;
   }, [deliveryData, inventory, dashboardSelectedProduct, frozenMonthlyPrices]);
-  const syncData = async (type: 'inventory' | 'delivery' = 'inventory', silent = false) => {
-    const link = type === 'inventory' ? sourceLink : DELIVERY_SHEET_URL;
+  const syncData = async (type: 'inventory' | 'delivery' | 'activos' = 'inventory', silent = false) => {
+    let link = type === 'inventory' ? sourceLink : (type === 'activos' ? ACTIVOS_SHEET_URL : DELIVERY_SHEET_URL);
     if (!link || !link.includes('docs.google.com/spreadsheets')) return;
     if (!silent) setIsSyncing(true);
     try {
@@ -1013,6 +1031,11 @@ const App: React.FC = () => {
           return { id: `item-${i}-${Date.now()}`, quantity: isNaN(parsedQty) ? 0 : parsedQty, name: cols[1] || 'Sin nombre', sku: cols[1]?.substring(0, 10).toUpperCase() || 'S/N', location: cols[2] || 'No especificado', responsible: cols[3] || 'Sin asignar', minStock: parseInt(cols[4]?.replace(/[^0-9]/g, '')) || 0, valor: cols[5] || '', link: cols[6] || '', imageUrl: cols[7] || '', category: cols[8] || 'General', arrivalDate: new Date().toISOString() };
         });
         setInventory(newInv);
+      } else if (type === 'activos') {
+        const newActivos = rows.map((cols, i) => {
+          return { id: `activo-${i}-${Date.now()}`, producto: cols[0]?.trim() || '', responsable: cols[1]?.trim() || '', lugar: cols[2]?.trim() || '', documentacion: cols[3]?.trim() || '' };
+        }).filter(a => a.producto);
+        setActivosData(newActivos);
       } else {
         const newDel = rows.map((cols, i) => { const isExtended = cols.length >= 6; const fechaIdx = isExtended ? 5 : 4; const deptoIdx = isExtended ? 3 : 2; const seccionIdx = isExtended ? 4 : 3; return { id: `del-${i}-${Date.now()}`, cantidad: parseInt(cols[0]?.replace(/[^0-9]/g, '') || '0') || 0, producto: cols[1]?.trim() || '', seccion: cols[seccionIdx]?.trim() || '', departamento: cols[deptoIdx]?.trim() || '', fecha: cols[fechaIdx]?.trim() || '' }; });
         setDeliveryData(newDel);
@@ -1021,9 +1044,9 @@ const App: React.FC = () => {
     finally { if (!silent) setIsSyncing(false); }
   };
   useEffect(() => {
-    syncData('inventory', true); syncData('delivery', true);
-    const syncInterval = setInterval(() => { syncData('inventory', true); syncData('delivery', true); }, 30000);
-    const handleFocus = () => { syncData('inventory', true); syncData('delivery', true); };
+    syncData('inventory', true); syncData('delivery', true); syncData('activos', true);
+    const syncInterval = setInterval(() => { syncData('inventory', true); syncData('delivery', true); syncData('activos', true); }, 30000);
+    const handleFocus = () => { syncData('inventory', true); syncData('delivery', true); syncData('activos', true); };
     window.addEventListener('focus', handleFocus);
     return () => { clearInterval(syncInterval); window.removeEventListener('focus', handleFocus); };
   }, [sourceLink]);
@@ -1103,7 +1126,64 @@ const App: React.FC = () => {
       setExpandedRequestId(null);
     } catch (e) { console.error("Error cancelando pedido:", e); } 
   };
-  const navItems = [ { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' }, { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' }, { id: AppSection.SOLICITUD, icon: <ICONS.Solicitud />, label: 'Solicitud' }, { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Historial' }, { id: AppSection.ORDER, icon: <ICONS.ShoppingBag />, label: 'PEDIR' }, ];
+  const handlePrint = () => {
+    try {
+      if (window.top !== window.self) {
+        const printWindow = window.open('', '_blank');
+        if (printWindow) {
+          const tableRows = activosData.filter(a => {
+            const f = activosFilter.toLowerCase();
+            return a.lugar.toLowerCase().includes(f) || a.producto.toLowerCase().includes(f) || a.responsable.toLowerCase().includes(f);
+          }).map(item => `
+            <tr>
+              <td>${item.producto}</td>
+              <td>${item.responsable || 'N/A'}</td>
+              <td>${item.lugar || 'N/A'}</td>
+            </tr>
+          `).join('');
+
+          printWindow.document.write(`
+            <html>
+              <head>
+                <title>INVENTARIO</title>
+                <style>
+                  body { font-family: sans-serif; padding: 20px; }
+                  table { width: 100%; border-collapse: collapse; }
+                  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+                  th { background-color: #f2f2f2; color: #475569; }
+                  td { color: #1e293b; }
+                  h2 { font-size: 16px; margin-bottom: 20px; text-transform: uppercase; font-family: sans-serif; }
+                </style>
+              </head>
+              <body>
+                <h2>INVENTARIO</h2>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Producto</th>
+                      <th>Responsable</th>
+                      <th>Lugar</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${tableRows}
+                  </tbody>
+                </table>
+              </body>
+            </html>
+          `);
+          printWindow.document.close();
+          printWindow.focus();
+          setTimeout(() => { printWindow.print(); printWindow.close(); }, 250);
+          return;
+        }
+      }
+      window.print();
+    } catch (e) {
+      window.print();
+    }
+  };
+  const navItems = [ { id: AppSection.DASHBOARD, icon: <ICONS.Dashboard />, label: 'Inicio' }, { id: AppSection.QUERY, icon: <ICONS.Search />, label: 'Buscar' }, { id: AppSection.SOLICITUD, icon: <ICONS.Solicitud />, label: 'Solicitud' }, { id: AppSection.ENTREGA, icon: <ICONS.Delivery />, label: 'Historial' }, { id: AppSection.ORDER, icon: <ICONS.ShoppingBag />, label: 'PEDIR' }, { id: AppSection.ACTIVOS, icon: <ICONS.Box />, label: 'INVENTARIO' } ];
   const hasSolicitudFilters = !!(solicitudFilters.seccion && solicitudFilters.departamento);
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-[#f2f2f2] pb-24 md:pb-0 font-['Plus_Jakarta_Sans'] selection:bg-blue-100 selection:text-blue-900 relative">
@@ -1118,7 +1198,7 @@ const App: React.FC = () => {
           }}
         />
       </div>
-      <aside className="hidden md:flex w-72 bg-transparent flex-col fixed h-full z-40">
+      <aside className="hidden md:flex w-72 bg-transparent flex-col fixed h-full z-40 print:hidden">
         <div className="flex justify-center -mt-12">
           <CustomLogo trigger={activeSection} />
         </div>
@@ -1134,8 +1214,8 @@ const App: React.FC = () => {
         </nav>
         <div className="p-8 mt-auto"><div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-center shadow-sm"><p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Status Sistema</p><div className="flex items-center justify-center gap-2"><div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-ping"></div><span className="text-[9px] font-black text-emerald-600 uppercase">En Línea</span></div></div></div>
       </aside>
-      <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full relative z-10`}>
-        <header className={`flex flex-col ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4 md:mb-6'} relative z-50`}>
+      <main className={`flex-1 md:ml-72 p-6 md:p-8 md:pt-10 max-w-7xl mx-auto w-full relative z-10 print:m-0 print:p-0 print:max-w-none`}>
+        <header className={`flex flex-col ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4 md:mb-6'} relative z-50 print:hidden`}>
           <div className={`flex flex-col md:flex-row justify-between items-center gap-4 ${solicitudStep === 'cerrar' ? 'mb-1' : 'mb-4'}`}>
             <div className="block animate-fade-in w-full order-2 md:order-1">
               <div className="flex flex-col items-center text-center md:-ml-36">
@@ -1155,6 +1235,7 @@ const App: React.FC = () => {
                   )}
                   {activeSection === AppSection.ENTREGA && <AnimatedTitle text="Historial" />}
                   {activeSection === AppSection.ORDER && <AnimatedTitle text="LISTA PRIORITARIA" />}
+                  {activeSection === AppSection.ACTIVOS && <AnimatedTitle text="INVENTARIO" />}
                 </h2>
                 {activeSection === AppSection.SOLICITUD && hasSolicitudFilters && solicitudStep === 'crear' && (
                   <div className="flex flex-wrap justify-center gap-2 md:gap-4 mb-4">
@@ -1461,8 +1542,72 @@ const App: React.FC = () => {
             </div>
           </div>
         )}
+        {activeSection === AppSection.ACTIVOS && (
+          <div className="animate-fade-in space-y-6">
+            <div className="bg-white p-4 md:p-6 rounded-[32px] shadow-[0_30px_70px_rgba(0,0,0,0.05)] border border-slate-200 relative overflow-hidden">
+               <div className="absolute top-0 right-0 p-14 opacity-[0.04] transform scale-[4] rotate-12 pointer-events-none text-blue-600 print:hidden"><ICONS.Box /></div>
+               <div className="relative">
+                 <div className="flex justify-between items-center mb-6">
+                   <div className="text-2xl font-black text-slate-800 uppercase tracking-[0.4em] opacity-80 flex items-center gap-5">
+                     <div className="w-10 h-10 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-500 print:hidden"><ICONS.Box /></div>
+                     INVENTARIO
+                   </div>
+                   <button onClick={handlePrint} className="print:hidden px-4 py-2 bg-indigo-50 text-indigo-600 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-600 hover:text-white transition-colors border border-indigo-100 shadow-sm">
+                     <ICONS.Printer />
+                     IMPRIMIR
+                   </button>
+                 </div>
+                 
+                 <div className="mb-6 print:hidden">
+                   <input type="text" value={activosFilter} onChange={(e) => setActivosFilter(e.target.value)} placeholder="Filtrar por lugar, producto o responsable..." className="w-full px-5 py-3.5 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all shadow-sm text-sm font-bold uppercase tracking-tight" />
+                 </div>
+
+                 {activosData.length === 0 ? ( 
+                   <div className="bg-slate-50 p-6 rounded-[20px] border border-dashed border-slate-300 text-center print:hidden">
+                     <p className="font-black text-slate-400 text-[9px] uppercase tracking-[0.3em]">No hay activos registrados.</p>
+                   </div> 
+                 ) : (
+                   <div className="w-full overflow-x-auto rounded-[20px] border border-slate-200 shadow-sm print:border-none print:shadow-none print:overflow-visible print:rounded-none">
+                     <table className="w-full text-left border-collapse min-w-max print:min-w-0">
+                       <thead>
+                         <tr className="bg-slate-100 print:bg-transparent border-b border-slate-200">
+                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Producto</th>
+                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Responsable</th>
+                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Lugar</th>
+                           <th className="p-4 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:hidden text-center">Documentación</th>
+                         </tr>
+                       </thead>
+                       <tbody className="divide-y divide-slate-100">
+                         {activosData.filter(a => {
+                           const f = activosFilter.toLowerCase();
+                           return a.lugar.toLowerCase().includes(f) || a.producto.toLowerCase().includes(f) || a.responsable.toLowerCase().includes(f);
+                         }).map((item) => (
+                           <tr key={item.id} className="hover:bg-slate-50 transition-colors print:hover:bg-transparent">
+                             <td className="p-4 print:p-2 text-[10px] font-bold text-slate-800 uppercase print:text-black">{item.producto}</td>
+                             <td className="p-4 print:p-2 text-[10px] font-bold text-slate-600 uppercase print:text-black">{item.responsable || 'N/A'}</td>
+                             <td className="p-4 print:p-2 text-[10px] font-bold text-slate-600 uppercase print:text-black">{item.lugar || 'N/A'}</td>
+                             <td className="p-4 print:hidden text-center">
+                               {item.documentacion ? (
+                                 <button onClick={() => setDocUrl(item.documentacion)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all hover:bg-blue-600 hover:text-white border border-blue-100 group shadow-sm">
+                                   <span>VER DOC</span>
+                                   <ICONS.ExternalLink />
+                                 </button>
+                               ) : (
+                                 <span className="text-[9px] font-bold text-slate-400 uppercase">Sin Doc</span>
+                               )}
+                             </td>
+                           </tr>
+                         ))}
+                       </tbody>
+                     </table>
+                   </div>
+                 )}
+               </div>
+            </div>
+          </div>
+        )}
       </main>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 px-2 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-around items-center z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)]">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/90 backdrop-blur-xl border-t border-slate-200 px-2 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-around items-center z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] print:hidden">
         {navItems.map((item) => (
           <button key={item.id} onClick={() => setActiveSection(item.id)} className={`group relative overflow-hidden flex flex-col items-center gap-2 min-w-[64px] transition-all duration-300 ${activeSection === item.id ? 'text-[#2e7d32]' : 'text-slate-400 hover:text-slate-600'}`}>
             <ShineEffect /><div className={`relative z-10 p-2.5 rounded-2xl transition-all duration-500 ${activeSection === item.id ? 'bg-[#2e7d32] text-white shadow-lg shadow-emerald-200 scale-110' : 'bg-transparent'}`}>{item.icon}</div><span className={`relative z-10 text-[10px] font-black uppercase tracking-tighter transition-all ${activeSection === item.id ? 'opacity-100 scale-100' : 'opacity-60 scale-95'}`}>{item.label}</span>
@@ -1479,7 +1624,31 @@ const App: React.FC = () => {
           />
         )}
       </AnimatePresence>
-
+      {docUrl && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 bg-black/60 backdrop-blur-sm print:hidden" onClick={() => setDocUrl(null)}>
+          <div className="bg-white rounded-[32px] w-full max-w-5xl h-[85vh] flex flex-col overflow-hidden shadow-2xl relative animate-fade-in" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 md:p-6 border-b border-slate-100 bg-slate-50/80 backdrop-blur-md shrink-0">
+              <h3 className="font-black text-slate-800 text-xs md:text-sm uppercase tracking-[0.2em] flex items-center gap-3">
+                <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center"><ICONS.ExternalLink /></div>
+                Documentación
+              </h3>
+              <button onClick={() => setDocUrl(null)} className="p-2 md:p-3 bg-white rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 shadow-sm border border-slate-200 transition-all flex items-center justify-center gap-2">
+                 <span className="text-[10px] font-black uppercase tracking-widest hidden md:inline">CERRAR</span>
+                 <ICONS.Minus />
+              </button>
+            </div>
+            <div className="flex-1 w-full bg-slate-100/50 p-2 md:p-4">
+              <div className="w-full h-full bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden relative">
+                <iframe 
+                  src={docUrl.includes('drive.google.com') && !docUrl.includes('preview') ? docUrl.replace(/\/view.*$/, '/preview').replace(/\/edit.*$/, '/preview') : docUrl} 
+                  className="absolute inset-0 w-full h-full border-none" 
+                  title="Documento" 
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <AnimatePresence>
         {stockError && (
           <motion.div
