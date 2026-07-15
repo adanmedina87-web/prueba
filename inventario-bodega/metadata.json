@@ -1,0 +1,5 @@
+{
+  "name": "Inventario bodega",
+  "description": "Aplicación de control de inventario vinculada a Google Sheets con IA.",
+  "requestFramePermissions": []
+}
