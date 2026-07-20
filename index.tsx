@@ -73,6 +73,7 @@ interface FinalizedRequest {
 
 interface Activo {
   id: string;
+  cantidad?: string | number;
   producto: string;
   responsable: string;
   lugar: string;
@@ -1033,7 +1034,7 @@ const App: React.FC = () => {
         setInventory(newInv);
       } else if (type === 'activos') {
         const newActivos = rows.map((cols, i) => {
-          return { id: `activo-${i}-${Date.now()}`, producto: cols[0]?.trim() || '', responsable: cols[1]?.trim() || '', lugar: cols[2]?.trim() || '', documentacion: cols[3]?.trim() || '' };
+          return { id: `activo-${i}-${Date.now()}`, cantidad: cols[0]?.trim() || '', producto: cols[1]?.trim() || '', responsable: cols[2]?.trim() || '', lugar: cols[3]?.trim() || '', documentacion: cols[4]?.trim() || '' };
         }).filter(a => a.producto);
         setActivosData(newActivos);
       } else {
@@ -1136,6 +1137,7 @@ const App: React.FC = () => {
             return a.lugar.toLowerCase().includes(f) || a.producto.toLowerCase().includes(f) || a.responsable.toLowerCase().includes(f);
           }).map(item => `
             <tr>
+              <td>${item.cantidad || '-'}</td>
               <td>${item.producto}</td>
               <td>${item.responsable || 'N/A'}</td>
               <td>${item.lugar || 'N/A'}</td>
@@ -1149,7 +1151,7 @@ const App: React.FC = () => {
                 <style>
                   body { font-family: sans-serif; padding: 20px; }
                   table { width: 100%; border-collapse: collapse; }
-                  th, td { border: 1px solid #ddd; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+                  th, td { border: 2px solid #ccc; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; font-weight: bold; }
                   th { background-color: #f2f2f2; color: #475569; }
                   td { color: #1e293b; }
                   h2 { font-size: 16px; margin-bottom: 20px; text-transform: uppercase; font-family: sans-serif; }
@@ -1160,6 +1162,7 @@ const App: React.FC = () => {
                 <table>
                   <thead>
                     <tr>
+                      <th style="width: 50px;">Cant</th>
                       <th>Producto</th>
                       <th>Responsable</th>
                       <th>Lugar</th>
@@ -1570,19 +1573,21 @@ const App: React.FC = () => {
                    <div className="w-full overflow-x-auto rounded-[20px] border border-slate-200 shadow-sm print:border-none print:shadow-none print:overflow-visible print:rounded-none">
                      <table className="w-full text-left border-collapse min-w-max print:min-w-0">
                        <thead>
-                         <tr className="bg-slate-100 print:bg-transparent border-b border-slate-200">
+                         <tr className="bg-slate-100 print:bg-transparent border-b-2 border-slate-300">
+                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black w-16">Cant</th>
                            <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Producto</th>
                            <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Responsable</th>
                            <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Lugar</th>
                            <th className="p-4 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:hidden text-center">Documentación</th>
                          </tr>
                        </thead>
-                       <tbody className="divide-y divide-slate-100">
+                       <tbody className="divide-y-2 divide-slate-200 print:divide-y-2 print:divide-slate-300">
                          {activosData.filter(a => {
                            const f = activosFilter.toLowerCase();
                            return a.lugar.toLowerCase().includes(f) || a.producto.toLowerCase().includes(f) || a.responsable.toLowerCase().includes(f);
                          }).map((item) => (
                            <tr key={item.id} className="hover:bg-slate-50 transition-colors print:hover:bg-transparent">
+                             <td className="p-4 print:p-2 text-[10px] font-black text-slate-800 print:text-black">{item.cantidad || '-'}</td>
                              <td className="p-4 print:p-2 text-[10px] font-bold text-slate-800 uppercase print:text-black">{item.producto}</td>
                              <td className="p-4 print:p-2 text-[10px] font-bold text-slate-600 uppercase print:text-black">{item.responsable || 'N/A'}</td>
                              <td className="p-4 print:p-2 text-[10px] font-bold text-slate-600 uppercase print:text-black">{item.lugar || 'N/A'}</td>
