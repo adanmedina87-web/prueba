@@ -1151,7 +1151,7 @@ const App: React.FC = () => {
                 <style>
                   body { font-family: sans-serif; padding: 20px; }
                   table { width: 100%; border-collapse: collapse; }
-                  th, td { border: 2px solid #ccc; padding: 8px; text-align: left; font-size: 10px; text-transform: uppercase; font-weight: bold; }
+                  th, td { border: 1px solid #000; padding: 4px; text-align: left; font-size: 10px; text-transform: uppercase; font-weight: bold; }
                   th { background-color: #f2f2f2; color: #475569; }
                   td { color: #1e293b; }
                   h2 { font-size: 16px; margin-bottom: 20px; text-transform: uppercase; font-family: sans-serif; }
@@ -1573,27 +1573,27 @@ const App: React.FC = () => {
                    <div className="w-full overflow-x-auto rounded-[20px] border border-slate-200 shadow-sm print:border-none print:shadow-none print:overflow-visible print:rounded-none">
                      <table className="w-full text-left border-collapse min-w-max print:min-w-0">
                        <thead>
-                         <tr className="bg-slate-100 print:bg-transparent border-b-2 border-slate-300">
-                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black w-16">Cant</th>
-                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Producto</th>
-                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Responsable</th>
-                           <th className="p-4 print:p-2 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:text-black">Lugar</th>
-                           <th className="p-4 font-black text-slate-600 text-[10px] uppercase tracking-[0.2em] print:hidden text-center">Documentación</th>
+                         <tr className="bg-slate-100 print:bg-transparent border-b-2 border-slate-400 print:border-black">
+                           <th className="px-3 py-2 print:px-2 print:py-1 font-black text-slate-700 text-[10px] uppercase tracking-[0.2em] print:text-black w-16 border-r border-slate-300 print:border-black">Cant</th>
+                           <th className="px-3 py-2 print:px-2 print:py-1 font-black text-slate-700 text-[10px] uppercase tracking-[0.2em] print:text-black border-r border-slate-300 print:border-black">Producto</th>
+                           <th className="px-3 py-2 print:px-2 print:py-1 font-black text-slate-700 text-[10px] uppercase tracking-[0.2em] print:text-black border-r border-slate-300 print:border-black">Responsable</th>
+                           <th className="px-3 py-2 print:px-2 print:py-1 font-black text-slate-700 text-[10px] uppercase tracking-[0.2em] print:text-black border-r border-slate-300 print:border-black">Lugar</th>
+                           <th className="px-3 py-2 font-black text-slate-700 text-[10px] uppercase tracking-[0.2em] print:hidden text-center">Documentación</th>
                          </tr>
                        </thead>
-                       <tbody className="divide-y-2 divide-slate-200 print:divide-y-2 print:divide-slate-300">
+                       <tbody className="divide-y-0">
                          {activosData.filter(a => {
                            const f = activosFilter.toLowerCase();
                            return a.lugar.toLowerCase().includes(f) || a.producto.toLowerCase().includes(f) || a.responsable.toLowerCase().includes(f);
                          }).map((item) => (
-                           <tr key={item.id} className="hover:bg-slate-50 transition-colors print:hover:bg-transparent">
-                             <td className="p-4 print:p-2 text-[10px] font-black text-slate-800 print:text-black">{item.cantidad || '-'}</td>
-                             <td className="p-4 print:p-2 text-[10px] font-bold text-slate-800 uppercase print:text-black">{item.producto}</td>
-                             <td className="p-4 print:p-2 text-[10px] font-bold text-slate-600 uppercase print:text-black">{item.responsable || 'N/A'}</td>
-                             <td className="p-4 print:p-2 text-[10px] font-bold text-slate-600 uppercase print:text-black">{item.lugar || 'N/A'}</td>
-                             <td className="p-4 print:hidden text-center">
+                           <tr key={item.id} className="hover:bg-slate-50 transition-colors print:hover:bg-transparent border-b border-slate-300 print:border-black">
+                             <td className="px-3 py-1.5 print:px-2 print:py-1 text-[10px] font-black text-slate-800 print:text-black border-r border-slate-300 print:border-black">{item.cantidad || '-'}</td>
+                             <td className="px-3 py-1.5 print:px-2 print:py-1 text-[10px] font-bold text-slate-800 uppercase print:text-black border-r border-slate-300 print:border-black">{item.producto}</td>
+                             <td className="px-3 py-1.5 print:px-2 print:py-1 text-[10px] font-bold text-slate-600 uppercase print:text-black border-r border-slate-300 print:border-black">{item.responsable || 'N/A'}</td>
+                             <td className="px-3 py-1.5 print:px-2 print:py-1 text-[10px] font-bold text-slate-600 uppercase print:text-black border-r border-slate-300 print:border-black">{item.lugar || 'N/A'}</td>
+                             <td className="px-3 py-1.5 print:hidden text-center">
                                {item.documentacion ? (
-                                 <button onClick={() => setDocUrl(item.documentacion)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-50 text-blue-600 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all hover:bg-blue-600 hover:text-white border border-blue-100 group shadow-sm">
+                                 <button onClick={() => setDocUrl(item.documentacion)} className="inline-flex items-center justify-center gap-1.5 px-4 py-1.5 bg-blue-50 text-blue-600 rounded-lg font-black text-[9px] uppercase tracking-widest transition-all hover:bg-blue-600 hover:text-white border border-blue-100 group shadow-sm">
                                    <span>VER DOC</span>
                                    <ICONS.ExternalLink />
                                  </button>
